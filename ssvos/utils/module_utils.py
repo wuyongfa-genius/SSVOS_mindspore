@@ -1,6 +1,7 @@
 """Some module utils in MindSpore."""
+import numpy as np
 from mindspore import nn, Parameter, ops
-from mindspore import numpy as np
+from mindspore import numpy as msnp
 from mindspore.common.initializer import TruncatedNormal, initializer
 
 
@@ -126,20 +127,21 @@ class Learnable_KSVD(nn.Cell):
         dictionary, squared_spectral_norm = self._init_dict()
         self.dictionary = Parameter(dictionary)  # d*N
         self.c = Parameter(squared_spectral_norm)
-        self.e = Parameter(np.eye(dictionary.shape[-1]), name='Identity')
+        self.e = Parameter(msnp.eye(dictionary.shape[-1]), name='Identity')
         # init ops to be used
         self.matmul = ops.MatMul()
         self.sign = ops.Sign()
         self.relu = ops.ReLU()
         self.abs = ops.Abs()
+        self.l2normalize = ops.L2Normalize(axis=0)
 
     def _init_dict(self):
         dictionary = initializer(TruncatedNormal(
             sigma=.02), (self.feat_dim, self.dict_atoms))  # d*N
         # normalize
-        dictionary = np.norm(dictionary, axis=1)
+        dictionary = self.l2normalize(dictionary)
         # compute the spectral norm of dict
-        spectral_norm = np.norm(dictionary, ord=2)
+        spectral_norm = np.linalg.norm(dictionary.asnumpy(), ord=2)
 
         return dictionary, spectral_norm**2
 
@@ -148,7 +150,7 @@ class Learnable_KSVD(nn.Cell):
 
     def construct(self, x):
         # normalize dict before every call
-        dictionary = np.norm(self.dictionary, axis=1)
+        dictionary = self.l2normalize(self.dictionary)
 
         lam = self.lambda_predictor(x)
         thresh = lam/self.c
