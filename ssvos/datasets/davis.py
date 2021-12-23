@@ -82,7 +82,7 @@ class DAVIS_VAL:
                 seg_path = frame_path.replace("JPEGImages", "Annotations").replace("jpg", "png")
             else:
                 frame = self._load_frame(frame_path)
-            frames.append(frame)
+            frames.append(frame) # type(frame) is tuple, len is 1
         ## read seg
         first_seg, seg_ori = self._read_seg(seg_path, self.out_stride)
 
@@ -94,11 +94,12 @@ class DAVIS_VAL:
 
 ## test
 # if __name__=="__main__":
-#     davis = DAVIS_VAL()
-#     idx, frames, h, w, small_seg, seg_ori = davis[0]
-#     print(f'index: {idx}')
+#     davis = DAVIS_VAL('/data/DATASETS/DAVIS2017/DAVIS-2017-trainval-480p/DAVIS')
+#     seq_info, frames, small_seg, seg_ori = davis[0]
+#     print(f'index: {seq_info[0]}')
+#     print(f'frames.shape: {frames.shape}')
 #     for frame in frames:
 #         print(f'frame.shape: {frame.shape}')
-#     print(f'h: {h}, w: {w}')
+#     print(f'h: {seq_info[1]}, w: {seq_info[2]}')
 #     print(f'small_seg.shape: {small_seg.shape}')
 #     print(f'seg_ori.shape: {seg_ori.shape}')

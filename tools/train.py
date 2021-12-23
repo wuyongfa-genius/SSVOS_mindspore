@@ -1,4 +1,4 @@
-"""The template train script in MindSpore."""
+"""The train script in MindSpore to train my own model."""
 import argparse
 import os
 
@@ -10,6 +10,7 @@ from ssvos.utils.callbacks import (ConsoleLoggerCallBack,
 from ssvos.utils.dist_utils import init_dist
 from ssvos.utils.lr_schedule import CosineDecayLRWithWarmup
 from ssvos.utils.Model_wrapper import Model_with_start_states
+from ssvos.datasets import RawFrameDataset
 
 
 def add_args():
@@ -75,18 +76,13 @@ def main():
         rank, group_size = 0, 1
 
     # init your train dataloader here
-    train_dataset = None
+    train_dataset = RawFrameDataset(args.dataset_root, args.ann_file)
     train_dataloader = DataLoader(train_dataset, args.batch_size, args.num_workers,
                                   shuffle=True, drop_last=True, distributed=args.distribute)
     train_dataloader = train_dataloader.build_dataloader()
-    # init your val dataloader here
-    val_dataset = None
-    val_dataloader = DataLoader(val_dataset, args.batch_size, args.num_workers,
-                                shuffle=False, distributed=args.distribute)
-    val_dataloader = val_dataloader.build_dataloader()
 
     # init your model here
-    model: nn.Cell = None  # best wrap your model with your loss
+    model:  = None  # best wrap your model with your loss
     # init your lr scheduler here
     dataset_size = train_dataloader.get_dataset_size()
     lr = args.base_lr * group_size * args.batch_size / 256.

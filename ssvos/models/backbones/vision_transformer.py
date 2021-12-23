@@ -17,7 +17,7 @@ class MLP(nn.Cell):
         self.fc2 = nn.Dense(hidden_features, out_features)
         self.drop2 = nn.Dropout(keep_drop_probs[1])
 
-    def forward(self, x):
+    def construct(self, x):
         x = self.fc1(x)
         x = self.act(x)
         x = self.drop1(x)
@@ -52,7 +52,7 @@ class Attention(nn.Cell):
         qkv = self.qkv(x)
         qkv = self.reshape(qkv, (B, N, 3, self.num_heads, C // self.num_heads))
         qkv = self.transpose(qkv, (2, 0, 3, 1, 4))
-        q, k, v = self.chunk(qkv)  # B,H,N,C
+        q, k, v = qkv
         # compute attention scores
         attention = self.bmm_qk(q, k) * self.scale
         attention = self.softmax(attention)
@@ -60,7 +60,7 @@ class Attention(nn.Cell):
         # get new x by attend v using attention scores
         x = self.bmm_av(attention, v)
         x = self.transpose(x, (0, 2, 1, 3))
-        x = self.reshape(B, N, C)
+        x = self.reshape(x, (B, N, C))
         # project back to x
         x = self.proj(x)
         x = self.proj_drop(x)
@@ -71,10 +71,11 @@ class TransformerEncoderLayer(nn.Cell):
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
                  act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
-        self.norm1 = norm_layer(dim)
+        norm_dim = dim if isinstance(dim, (tuple, list)) else (dim,)
+        self.norm1 = norm_layer(norm_dim)
         self.attn = Attention(
             dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
-        self.norm2 = norm_layer(dim)
+        self.norm2 = norm_layer(norm_dim)
         mlp_hidden_dim = int(dim*mlp_ratio)
         self.mlp = MLP(dim, mlp_hidden_dim, act_layer=act_layer, drop=drop)
     
@@ -101,8 +102,19 @@ class TransformerEncoder(nn.Cell):
                 if cell.bias is not None:
                     init_param(cell.bias, 'zeros')
             elif isinstance(cell, nn.LayerNorm):
-                init_param(cell.weight, 'ones')
-                init_param(cell.bias, 'zeros')
+                init_param(cell.gamma, 'ones')
+                init_param(cell.beta, 'zeros')
 
     def construct(self, x):
         return self.encoder_layers(x)
+
+
+# if __name__=="__main__":
+#     from mindspore import context
+#     from mindspore.common.initializer import initializer, Normal
+
+#     context.set_context(device_target='GPU', mode=context.GRAPH_MODE)
+#     transformer = TransformerEncoder()
+#     dummy_input = initializer(Normal(), (2, 8, 768))
+#     y = transformer(dummy_input)
+#     print(y.shape)

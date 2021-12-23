@@ -1,4 +1,5 @@
 """Implement some callbacks frequently used"""
+from inspect import getargs
 import os
 import time
 import numpy as np
@@ -15,7 +16,7 @@ from mindspore.train.serialization import save_checkpoint
 class MyModelCheckpoint(Callback):
     def __init__(self,
                  directory,
-                 append_dict: dict,
+                 append_dict: dict={},
                  interval=1,
                  prefix='ckpt',
                  master_only=True,
@@ -40,6 +41,7 @@ class MyModelCheckpoint(Callback):
 
     def _save_ckpt(self, cb_params, force=False):
         cur_epoch = cb_params.cur_epoch_num
+        global_step = cb_params.cur_step_num
         if cur_epoch == self._last_epoch + self.interval or force:
             logger.info("[INFO] Start saving checkpoint...")
             ckpt_path = os.path.join(
@@ -49,7 +51,8 @@ class MyModelCheckpoint(Callback):
             else:
                 network = cb_params.train_network
             # save epoch_num
-            self._append_dict.update(**{'epoch': cur_epoch})
+            self._append_dict.update(epoch=cur_epoch)
+            self._append_dict.update(global_step=global_step)
             save_checkpoint(network, ckpt_path, append_dict=self._append_dict)
             logger.info(f'[INFO] Checkpoint saved at {ckpt_path}.')
             # update last epoch
@@ -196,7 +199,7 @@ class MindSightLoggerCallback(Callback):
         global_step = cb_params.cur_step_num
         if global_step == self._last_step + self.log_interval:
             if dist.get_rank() == 0:
-                cur_lr = self._get_optimizer(cb_params).learning_rate.data
+                cur_lr = self._get_optimizer(cb_params).learning_rate
                 loss = self._get_loss(cb_params)
                 self.summary_record.add_value(
                     'scalar', 'global_step', global_step)
@@ -331,3 +334,5 @@ class ConsoleLoggerCallBack(Callback):
             log_str = f'{cur_time} - Epoch [{epoch}][{step}/{batch_num}] lr: {cur_lr}, loss: {loss}'
             logger.info(log_str)
             self._last_step = global_step
+
+        

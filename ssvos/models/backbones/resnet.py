@@ -1,12 +1,12 @@
 """Implement resnet in MindSpore. Mostly adapted from official torchvision resnet."""
 from mindspore import nn, ops
 from ssvos.utils.param_utils import default_weight_init
-from typing import Tuple
+from ssvos.utils.module_utils import Identity
 
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, pad_mode='pad',
                      padding=dilation, dilation=dilation, group=groups, has_bias=False)
 
 
@@ -84,7 +84,7 @@ class Bottleneck(nn.Cell):
         self.downsample = downsample
         self.stride = stride
 
-    def constrcut(self, x):
+    def construct(self, x):
         identity = x
 
         out = self.conv1(x)
@@ -183,7 +183,7 @@ class ResNet(nn.Cell):
                                 base_width=self.base_width, dilation=self.dilation,
                                 norm_layer=norm_layer))
 
-        return nn.SequentialCell(*layers)
+        return nn.SequentialCell(layers)
 
     def construct(self, x):
         x = self.conv1(x)
@@ -199,3 +199,91 @@ class ResNet(nn.Cell):
         x = self.global_pool(x, (2, 3))
         x = self.flatten(x)
         return x
+
+
+class CustomResNet(ResNet):
+    def __init__(self, depth, groups=1, width_per_group=64, replace_stride_with_dilation=None, norm_layer=None,
+                        out_layer=3, out_block=1, out_stride=8):
+        super().__init__(depth, groups=groups, width_per_group=width_per_group,
+                         replace_stride_with_dilation=replace_stride_with_dilation, norm_layer=norm_layer)
+        assert out_layer in [3, 4]
+        assert out_stride in [8, 16]
+
+        if depth not in self.arch_settings:
+            raise KeyError(f'invalid depth {depth} for resnet')
+        block, layers = self.arch_settings[depth]
+        if norm_layer is None:
+            norm_layer = nn.BatchNorm2d
+        self._norm_layer = norm_layer
+
+        self.inplanes = 64
+        self.dilation = 1
+        if replace_stride_with_dilation is None:
+            # each element in the tuple indicates if we should replace
+            # the 2x2 stride with a dilated convolution instead
+            replace_stride_with_dilation = [False, False, False]
+        if len(replace_stride_with_dilation) != 3:
+            raise ValueError("replace_stride_with_dilation should be None "
+                             "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
+        self.groups = groups
+        self.base_width = width_per_group
+        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2,
+                               pad_mode='pad', padding=3, has_bias=False)
+        self.bn1 = norm_layer(self.inplanes)
+        self.relu = nn.ReLU()
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, pad_mode='same')
+        self.layer1 = self._make_layer(block, 64, layers[0])
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2,
+                                       dilate=replace_stride_with_dilation[0])
+        if out_layer == 3:
+            layer3_stride = 1 if out_stride == 8 else 2
+            self.layer3 = self._make_layer(block, 256, out_block, layer3_stride,
+                                           dilate=replace_stride_with_dilation[1])
+            self.layer4 = Identity()
+        else:
+            layer3_stride = 1 if out_stride == 8 else 2
+            self.layer3 = self._make_layer(block, 256, layers[2], layer3_stride,
+                                           dilate=replace_stride_with_dilation[1])
+            self.layer4 = self._make_layer(block, 512, out_block, 1,
+                                           dilate=replace_stride_with_dilation[2])
+
+        self._init_weights()
+
+    def construct(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+
+        return x
+
+
+# if __name__ == "__main__":
+#     from mindspore import context
+#     from mindspore.train.serialization import save_checkpoint, load_checkpoint, load_param_into_net
+#     from mindspore.common.initializer import initializer, Normal
+
+#     context.set_context(device_target='GPU', mode=context.GRAPH_MODE)
+#     resnet = ResNet(50)
+#     save_checkpoint(resnet, 'resnet.ckpt')
+#     custom_resnet = CustomResNet(depth=50, out_layer=3, out_block=1, out_stride=8)
+#     save_checkpoint(custom_resnet, 'custom_resnet.ckpt')
+
+#     load_checkpoint('custom_resnet.ckpt', resnet)
+
+
+
+    # param_not_load = load_param_into_net(custom_resnet, ckpt, strict_load=True)
+    # for param in param_not_load:
+    #     print(f'{param} is not loaded.')
+    # print(resnet)
+    # for name, cell in resnet.cells_and_names():
+    #     print(name)
+    # dummy_input = initializer(Normal(), (8, 3, 224, 224))
+    # y = resnet(dummy_input)
+    # print(y.shape)

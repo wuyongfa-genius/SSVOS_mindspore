@@ -3,7 +3,7 @@ from PIL import Image
 
 import os
 import numpy as np
-from .utils import Inter
+from mindspore.dataset.vision import Inter
 from mindspore.dataset import GeneratorDataset
 
 augment_error_message = "img should be PIL image. Got {}. Use Decode() for encoded data or ToPIL() for decoded data."
@@ -85,11 +85,13 @@ def resize(img, size, interpolation=Inter.BILINEAR):
 class DataLoader:
     def __init__(self,
                 dataset,
-                batch_size,
-                num_workers,
+                batch_size=1,
+                num_workers=1,
                 shuffle=False,
                 drop_last=False,
                 transforms=None,
+                column_names=[],
+                distributed=False,
                 **kwargs
                 ):      
         self.dataset = dataset
@@ -98,38 +100,43 @@ class DataLoader:
         self.shuffle = shuffle
         self.drop_last = drop_last
         self.transforms = transforms
+        self.column_names = column_names
+        self.distributed = distributed
 
-        self.max_rowsize = kwargs.get('max_rowsize', 16)
-        self.python_multiprocessing = kwargs.get('python_multiprocessing', True)
+        self.max_rowsize = kwargs.get('max_rowsize', 64)
     
     def build_dataloader(self):
-        rank_size = int(os.getenv("RANK_SIZE", '1'))
-        rank_id = int(os.getenv('RANK_ID', '0'))
-
-        data_generator = GeneratorDataset(self.dataset,
-                                        num_parallel_workers=self.num_workers,
-                                        shuffle=self.shuffle,
-                                        num_shards=rank_size,
-                                        shard_id=rank_id,
-                                        max_rowsize=self.max_rowsize)
+        # get or set col names
+        col_names = self.column_names
+        if len(col_names)==0:
+            example_item = self.dataset[0]
+            item_len = len(example_item)
+            col_names = [f'col_{i}' for i in range(item_len)]
+        if self.distributed:
+            rank_size = int(os.getenv("RANK_SIZE", '1'))
+            rank_id = int(os.getenv('RANK_ID', '0'))
+            data_generator = GeneratorDataset(self.dataset,
+                                            column_names=col_names,
+                                            num_parallel_workers=self.num_workers,
+                                            shuffle=self.shuffle,
+                                            num_shards=rank_size,
+                                            shard_id=rank_id,
+                                            max_rowsize=self.max_rowsize)
+        else:
+            data_generator = GeneratorDataset(self.dataset,
+                                            column_names=col_names,
+                                            num_parallel_workers=self.num_workers,
+                                            shuffle=self.shuffle,
+                                            max_rowsize=self.max_rowsize)
         if self.transforms is not None:
             data_generator = data_generator.map(operations=self.transforms,
                                                 num_parallel_workers=self.num_workers,
-                                                python_multiprocessing=self.python_multiprocessing,
                                                 max_rowsize=self.max_rowsize)
         dataloader = data_generator.batch(batch_size=self.batch_size,
                                     drop_remainder=self.drop_last,
-                                    python_multiprocessing=self.python_multiprocessing,
                                     max_rowsize=self.max_rowsize)
         
         return dataloader
-
-
-# def imread_indexed(filename):
-#     """ Load image given filename."""
-#     im = Image.open(filename)
-#     annotation = np.atleast_3d(im)[..., 0]
-#     return annotation, np.array(im.getpalette()).reshape((-1, 3))
 
 
 def imwrite_indexed(filename, array, color_palette=default_palette):
@@ -142,6 +149,7 @@ def imwrite_indexed(filename, array, color_palette=default_palette):
     im.putpalette(color_palette.ravel())
     im.save(filename, format='PNG')
 
+
 def norm_mask(mask):
     c, h, w = mask.shape
     for cnt in range(c):
@@ -151,3 +159,33 @@ def norm_mask(mask):
             mask_cnt = mask_cnt/mask_cnt.max()
             mask[cnt, :, :] = mask_cnt
     return mask
+
+
+# if __name__=="__main__":
+#     from ssvos.utils.dist_utils import init_dist
+#     init_dist()
+
+    # from ssvos.datasets.video_dataset import RawFrameDataset
+    # ytvos_dataset = RawFrameDataset(root='/data/DATASETS/Youtube_VOS/2018', ann_file='ytvos_2018_raw_frames.txt')
+    # dataloader = DataLoader(ytvos_dataset, 2, 4, shuffle=True)
+    # dataloader = dataloader.build_dataloader()
+
+    # for batch in dataloader.create_tuple_iterator():
+    #     clip1, clip2 = batch
+    #     print(f'{type(clip1)}, {clip1.shape}')
+    #     print(f'{type(clip2)}, {clip2.shape}')
+
+    # from ssvos.datasets.davis import DAVIS_VAL
+    # davis_dataset = DAVIS_VAL('/data/DATASETS/DAVIS2017/DAVIS-2017-trainval-480p/DAVIS')
+    # dataloader = DataLoader(davis_dataset, 1, 1, column_names=['seq_info', 'frames', 'small_seg', 'seg_ori'], distributed=True)
+    # dataloader = dataloader.build_dataloader()
+
+    # batch_iter = dataloader.create_tuple_iterator()
+    # for _ in range(30):
+    #     batch = next(batch_iter)
+    #     seq_info, frames, small_seg, seg_ori = batch
+    #     print(f'index: {seq_info[0][0]}')
+    #     print(f'frame.shape: {frames[0].shape}')
+    #     print(f'h: {seq_info[0][1]}, w: {seq_info[0][2]}')
+    #     print(f'small_seg.shape: {small_seg.shape}')
+    #     print(f'seg_ori.shape: {seg_ori.shape}')

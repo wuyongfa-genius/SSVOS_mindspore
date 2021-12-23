@@ -6,7 +6,7 @@ from mindspore import numpy as np
 from mindspore import communication as dist
 from ssvos.utils.param_utils import default_weight_init
 from ssvos.utils.loss_utils import CrossEntropyLoss
-from ssvos.utils.module_utils import Learnable_KSVD
+from ssvos.utils.module_utils import Learnable_KSVD, NetWithSymmetricLoss
 
 
 class CFC(nn.Cell):
@@ -15,12 +15,14 @@ class CFC(nn.Cell):
                  frame_branch=VideoTransformerNetwork,
                  dim=256,
                  mlp_dim=4096,
-                 T=1.0
+                 T=1.0,
+                 clip_branch_cfg=dict(depth=50),
+                 frame_branch_cfg=dict(seqlength=8, _2d_feat_extractor_depth=50)
                  ):
         super().__init__()
         self.T = T
-        self.clip_branch = clip_branch(depth=50)
-        self.frame_brach = frame_branch(depth=50)
+        self.clip_branch = clip_branch(**clip_branch_cfg)
+        self.frame_brach = frame_branch(**frame_branch_cfg) # we use resnet50 by default
         # make sure features from two branches have same dim
         assert self.clip_branch.feat_dim == self.frame_brach.feat_dim
         feat_dim = self.clip_branch.feat_dim
@@ -58,7 +60,7 @@ class CFC(nn.Cell):
         k1 = self.predictor(self.projector(self.clip_branch(x1)))
         k2 = self.predictor(self.projector(self.clip_branch(x2)))
 
-        return tuple(q1, q2, k1, k2)
+        return q1, q2, k1, k2
 
 
 class CFCwithLearnableKSVD(CFC):
@@ -67,7 +69,7 @@ class CFCwithLearnableKSVD(CFC):
                  frame_branch=VideoTransformerNetwork,
                  dim=256,
                  mlp_dim=4096,
-                 T=1,
+                 T=1.,
                  dict_atoms=4096,
                  ISTA_iters=10):
         super().__init__(clip_branch=clip_branch,
@@ -93,45 +95,18 @@ class CFCwithLearnableKSVD(CFC):
         return self.split(x)
 
 
-class InfoNCELoss(nn.Cell):
-    def __init__(self, T=0.3):
-        super().__init__()
-        self.T = T
-        self.normalize = nn.Norm(axis=1)
-        self.cross_entropy = CrossEntropyLoss()
-        # init some ops to be used
-        self.all_gather = ops.AllGather()
-        self.matmul = ops.MatMul(transpose_b=True)
 
-    def construct(self, q, k):
-        N = q.shape[0]
-        q = self.normalize(q)
-        k = self.normalize(k)
-        # gather all targets
-        k = self.all_gather(k)
-        logits = self.matmul(q, k) / self.T
-        # create labels
-        rank = dist.get_rank()
-        labels = np.arange(N, dtype=mstype.int64) + N*rank
-        cross_entropy = self.cross_entropy(logits, labels)
+if __name__=="__main__":
+    # from mindspore import context
+    # from mindspore.common.initializer import initializer, Normal
+    # from ssvos.utils.dist_utils import init_dist
 
-        return 2*self.T*cross_entropy
+    # context.set_context(device_target='GPU', mode=context.PYNATIVE_MODE)
+    # init_dist()
 
-
-class NetWithSymmetricLoss(nn.Cell):
-    """Wrap a Network with a symmetric Loss.
-    Args:
-        net(nn.Cell): A network with two branches outputing 
-            (q1, q2, k1, k2)
-        loss_fn(nn.Cell): A contrastive loss.
-    """
-
-    def __init__(self, net, loss_fn):
-        super().__init__(auto_prefix=False)
-        self._net = net
-        self._loss_fn = loss_fn
-
-    def construct(self, x1, x2):
-        q1, q2, k1, k2 = self._net(x1, x2)
-
-        return self._loss_fn(q1, k2) + self._loss_fn(q2, k1)
+    # cfc = CFCwithLearnableKSVD()
+    # cfc_InfoNCE = NetWithSymmetricLoss(cfc, InfoNCELoss())
+    # dummy_input_1 = initializer(Normal(), (2,3,8,224,224))
+    # dummy_input_2 = dummy_input_1.copy()
+    # loss = cfc_InfoNCE(dummy_input_1, dummy_input_2)
+    # print(loss)

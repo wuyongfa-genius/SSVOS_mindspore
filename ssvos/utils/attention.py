@@ -16,12 +16,12 @@ def pytorch_topk(x:Tensor, k, dim=-1):
         transposed_dim_list = ori_dim_list
         transposed_dim_list[dim] = last_dim
         transposed_dim_list[last_dim] = dim
-        x = transpose_op(x, transposed_dim_list)
+        x = transpose_op(x, tuple(transposed_dim_list))
         # perform topk
         values, indices = topk_op(x, k)
         # transpose back
-        values = transpose_op(values, transposed_dim_list)
-        indices = transpose_op(indices, transposed_dim_list)
+        values = transpose_op(values, tuple(transposed_dim_list))
+        indices = transpose_op(indices, tuple(transposed_dim_list))
         return values, indices
 
 
@@ -39,7 +39,7 @@ def spatial_neighbor(batches,
         neighbor_range = (neighbor_range, neighbor_range)
         # [N, H, W, H, W]
         mask:Tensor = np.zeros(
-            batches, height, width, height, width,dtype=dtype)
+            batches, height, width, height, width, dtype=dtype)
         for i in range(height):
             for j in range(width):
                 top = max(0, i - neighbor_range[0] // 2)
@@ -62,7 +62,7 @@ def spatial_neighbor(batches,
                      grid_y.view(1, 1, height, width))**2)**0.5
         mask = dist_mat < radius
         mask = mask.view(height * width, height * width)
-    return mask.astype(mstype.bool_)
+    return mask .astype(dtype)
 
 
 def masked_attention_efficient(query,
@@ -116,7 +116,7 @@ def masked_attention_efficient(query,
     output_channels = value.shape[1]
     query_vec = query.view(batches, att_channels, query_height*query_width)
     key_vec = key.view(batches, att_channels, clip_len*key_height*key_width)
-    value_vec = value.view(batches, att_channels,
+    value_vec = value.view(batches, output_channels,
                            clip_len*key_height*key_width) # [N, C, THW]
     output = create_zeros_tensor_op((batches, output_channels,
                                      query_height * query_width), query.dtype)
@@ -135,7 +135,7 @@ def masked_attention_efficient(query,
                 step_mask = mask.view(1, 1, key_height * key_width,
                                       query_height*query_width)[..., ptr:ptr+step]
                 expand_op = ops.BroadcastTo(
-                    batches, clip_len - non_mask_len, -1, 1)
+                    (batches, clip_len - non_mask_len, -1, -1))
                 step_mask = expand_op(step_mask)
                 step_mask = step_mask.reshape(
                     (batches, -1, step_affinity.shape[2]))
@@ -151,12 +151,13 @@ def masked_attention_efficient(query,
                     step_mask])
             step_affinity[~step_mask.astype(mstype.bool_)] = float('-inf')
         if topk is not None:
+            # actually we always select topk elements.
             topk_affinity, topk_indices = pytorch_topk(step_affinity, topk, dim=1) # [N, topk, step]
             # here we should use a standard index_select
             _value_vec = transpose_op(value_vec, (1,0,2)).reshape(output_channels, -1) # [C, NTHW]
-            _tokp_indices = topk_indices.rehsape(-1) # [N*topk*step]
+            _tokp_indices = topk_indices.reshape(-1) # [N*topk*step]
             topk_value = _value_vec[:, _tokp_indices] # [C, N*topk*step]
-            topk_value.reshape(output_channels, *topk_indices.shape)
+            topk_value = topk_value.reshape(output_channels, *topk_indices.shape)
             topk_value = transpose_op(topk_value, (1,0,2,3)) # [N, C, topk, step]
 
             softmax_along_axis1_op = ops.Softmax(axis=1)
@@ -164,6 +165,9 @@ def masked_attention_efficient(query,
 
             topk_affinity = unsqueeze_op(topk_affinity, 1) # [N, 1, topk, step]
             step_output = (topk_affinity*topk_value).sum(2) # [N, C, step]
+        else:
+            step_output = create_zeros_tensor_op((batches, output_channels,
+                                     step), query.dtype)
         output[...,ptr:ptr+step] = step_output
     
     output = output.reshape(batches, output_channels, query_height, query_width)

@@ -10,11 +10,11 @@ from ssvos.models.backbones.vision_transformer import TransformerEncoder
 
 class VideoTransformerNetwork(nn.Cell):
     def __init__(self, seqlength=8, d_model=2048,
-                 num_layers=3, num_heads=12, mlp_ratio=2.,
+                 num_layers=3, num_heads=16, mlp_ratio=2.,
                  dropout_embed=0., drop_mlp=0., drop_attn=0.,
-                 frame_feat_extractor=ResNet, **extractor_kwargs):
+                 frame_feat_extractor=ResNet, _2d_feat_extractor_depth=50):
         super().__init__()
-        self.frame_feat_extractor = frame_feat_extractor(**extractor_kwargs)
+        self.frame_feat_extractor = frame_feat_extractor(depth=_2d_feat_extractor_depth)
         if hasattr(self.frame_feat_extractor, 'fc'):
             setattr(self.frame_feat_extractor, 'fc', Identity())
         frame_feat_dim = self.frame_feat_extractor.feat_dim
@@ -40,13 +40,13 @@ class VideoTransformerNetwork(nn.Cell):
     def construct(self, x):
         B, C, T, H, W = x.shape
         x = self.transpose(x, (0, 2, 1, 3, 4))
-        x = self.reshape(x, B*T, C, H, W)
+        x = self.reshape(x, (B*T, C, H, W))
         frame_embeds = self.frame_feat_extractor(x)
         frame_embeds = self.reshape(frame_embeds, (B, T, frame_embeds.shape[-1]))
         # repeat global_token batch times
         global_tokens = self.global_token.repeat(B, axis=0)
         # concat global_tokens with frame_embeds
-        x = self.cat(global_tokens, frame_embeds)
+        x = self.cat((global_tokens, frame_embeds))
         # add pos embed
         x += self.pos_emb
         x = self.embed_drop(x)
@@ -55,3 +55,14 @@ class VideoTransformerNetwork(nn.Cell):
         global_tokens = x[:, 0]
 
         return global_tokens
+
+
+# if __name__=="__main__":
+#     from mindspore import context
+#     from mindspore.common.initializer import initializer, Normal
+
+#     context.set_context(device_target='GPU', mode=context.GRAPH_MODE)
+#     vtn = VideoTransformerNetwork(num_heads=16, depth=50)
+#     dummy_input = initializer(Normal(), (2, 3, 8, 224, 224))
+#     y = vtn(dummy_input)
+#     print(y.shape)

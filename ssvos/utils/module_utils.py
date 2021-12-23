@@ -1,4 +1,5 @@
 """Some module utils in MindSpore."""
+from os import name
 import numpy as np
 from mindspore import nn, Parameter, ops
 from mindspore import numpy as msnp
@@ -124,6 +125,7 @@ class Learnable_KSVD(nn.Cell):
             nn.ReLU(),
             nn.Dense(feat_dim//16, 1)
         )
+        self.l2normalize = ops.L2Normalize(axis=0)
         dictionary, squared_spectral_norm = self._init_dict()
         self.dictionary = Parameter(dictionary)  # d*N
         self.c = Parameter(squared_spectral_norm)
@@ -133,8 +135,7 @@ class Learnable_KSVD(nn.Cell):
         self.sign = ops.Sign()
         self.relu = ops.ReLU()
         self.abs = ops.Abs()
-        self.l2normalize = ops.L2Normalize(axis=0)
-
+        
     def _init_dict(self):
         dictionary = initializer(TruncatedNormal(
             sigma=.02), (self.feat_dim, self.dict_atoms))  # d*N
@@ -153,7 +154,7 @@ class Learnable_KSVD(nn.Cell):
         dictionary = self.l2normalize(self.dictionary)
 
         lam = self.lambda_predictor(x)
-        thresh = lam/self.c
+        thresh = (lam/self.c).transpose() # 1*B
         # Iterative Soft-Thresholding Shrinkage Iteration
         M1 = self.e-1/self.c * \
             self.matmul(dictionary.transpose(), dictionary)  # N*N
@@ -166,3 +167,33 @@ class Learnable_KSVD(nn.Cell):
         rec_x = self.matmul(dictionary, alpha).transpose()
 
         return rec_x
+
+
+class NetWithSymmetricLoss(nn.Cell):
+    """Wrap a Network with a symmetric Loss.
+    Args:
+        net(nn.Cell): A network with two branches outputing 
+            (q1, q2, k1, k2)
+        loss_fn(nn.Cell): A contrastive loss.
+    """
+
+    def __init__(self, net, loss_fn):
+        super().__init__(auto_prefix=False)
+        self._net = net
+        self._loss_fn = loss_fn
+
+    def construct(self, x1, x2):
+        q1, q2, k1, k2 = self._net(x1, x2)
+
+        return 0.5 * self._loss_fn(q1, k2) + 0.5 * self._loss_fn(q2, k1)
+
+
+# if __name__=="__main__":
+#     from mindspore import context
+#     from mindspore.common.initializer import initializer, Normal
+
+#     context.set_context(device_target='GPU', mode=context.GRAPH_MODE)
+#     learnable_ksvd = Learnable_KSVD()
+#     dummy_input = initializer(Normal(), (8,256))
+#     y = learnable_ksvd(dummy_input)
+#     print(y.shape)

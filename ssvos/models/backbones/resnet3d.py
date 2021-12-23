@@ -1,5 +1,6 @@
 """Implement 3D ResNet backbone in MindSpore, mostly adapted from mmaction2."""
 from mindspore import nn, ops
+from mindspore.nn import cell
 from ssvos.utils.module_utils import ConvModule
 from ssvos.utils.param_utils import default_weight_init, init_param
 
@@ -331,8 +332,7 @@ class ResNet3d(nn.Cell):
         self.pool1_stride_t = pool1_stride_t
         self.with_pool1 = with_pool1
         self.with_pool2 = with_pool2
-        self.stage_inflations = (
-            inflate, inflate, inflate, inflate)  # 4 stages by default
+        self.stage_inflations = inflate  # 4 stages by default
         self.inflate_style = inflate_style
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
@@ -371,7 +371,7 @@ class ResNet3d(nn.Cell):
             self.inplanes = planes * self.block.expansion
             layer_name = f'layer{i + 1}'
             self.insert_child_to_cell(layer_name, res_layer)
-            self.res_layers.append(layer_name)
+            self.res_layers.append(res_layer)
 
         self.global_pool = ops.ReduceMean(keep_dims=True)
         self.flatten = nn.Flatten()
@@ -382,13 +382,30 @@ class ResNet3d(nn.Cell):
 
     def _init_weights(self):
         default_weight_init(self)
-
+        # init last bn's weight to 0 so that the residual path is initialized to 0
         if self.zero_init_residual:
             for cell in self.cells():
                 if isinstance(cell, Bottleneck3d):
                     init_param(cell.conv3.norm.gamma, 'zeros')
                 elif isinstance(cell, BasicBlock3d):
                     init_param(cell.conv2.norm.gamma, 'zeros')
+        # rename Parameter so that it doen't conflict (necessary when in GRAPH_MODE)
+        print('[INFO] RENAME Parameters so that their names do not conflict.')
+        for i in range(1, self.num_stages+1):
+            layer_name = f'layer{i}'
+            layer_cell:nn.Cell = getattr(self, layer_name)
+            for name, cell in layer_cell.cells_and_names():
+                if isinstance(cell, nn.Conv3d):
+                    cell.weight.name = f'{layer_name}.{cell.weight.name}'
+                    if cell.bias is not None:
+                        cell.bias.name = f'{layer_name}.{cell.bias.name }'
+                elif isinstance(cell, nn.BatchNorm3d):
+                    if cell.bn2d.gamma is not None:
+                        cell.bn2d.gamma.name = f'{layer_name}.{cell.bn2d.gamma.name}'
+                    if cell.bn2d.beta is not None:
+                        cell.bn2d.beta.name = f'{layer_name}.{cell.bn2d.beta.name}'
+                    cell.bn2d.moving_mean.name = f'{layer_name}.{cell.bn2d.moving_mean.name}'
+                    cell.bn2d.moving_variance.name = f'{layer_name}.{cell.bn2d.moving_variance.name}'
 
     def _make_stem_layer(self):
         """Construct the stem layers consists of a conv+norm+act module and a
@@ -399,8 +416,7 @@ class ResNet3d(nn.Cell):
             kernel_size=self.conv1_kernel,
             stride=(self.conv1_stride_t, self.conv1_stride_s,
                     self.conv1_stride_s),
-            padding=tuple([(k - 1) // 2 for k in (self.conv1_kernel,
-                          self.conv1_kernel, self.conv1_kernel)]),
+            padding=tuple([(k - 1) // 2 for k in self.conv1_kernel]),
             bias=False,
             conv_cfg=self.conv_cfg,
             norm_cfg=self.norm_cfg,
@@ -411,7 +427,7 @@ class ResNet3d(nn.Cell):
             strides=(self.pool1_stride_t, self.pool1_stride_s,
                      self.pool1_stride_s),
             pad_mode='pad',
-            padding=(0, 0, 1, 1, 1, 1))
+            pad_list=(0, 0, 1, 1, 1, 1))
 
         self.pool2 = ops.MaxPool3D(kernel_size=(2, 1, 1), strides=(
             2, 1, 1), pad_mode='pad', pad_list=0)
@@ -509,8 +525,7 @@ class ResNet3d(nn.Cell):
         if self.with_pool1:
             x = self.maxpool(x)
         outs = []
-        for i, layer_name in enumerate(self.res_layers):
-            res_layer = getattr(self, layer_name)
+        for i, res_layer in enumerate(self.res_layers):
             x = res_layer(x)
             if i == 0 and self.with_pool2:
                 x = self.pool2(x)
@@ -522,3 +537,14 @@ class ResNet3d(nn.Cell):
             return outs[0]
 
         return tuple(outs)
+
+
+# if __name__=="__main__":
+#     from mindspore import context
+#     from mindspore.common.initializer import initializer, Normal
+
+#     context.set_context(device_target='GPU', mode=context.GRAPH_MODE)
+#     resnet = ResNet3d(depth=50)
+#     dummy_input = initializer(Normal(), (1,3,8,224,224))
+#     y = resnet(dummy_input)
+#     print(y.shape)
