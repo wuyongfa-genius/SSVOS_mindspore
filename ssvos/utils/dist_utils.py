@@ -10,7 +10,6 @@ def init_dist(parallel_mode=ParallelMode.DATA_PARALLEL):
     rank_size = int(os.getenv('RANK_SIZE', '1'))
     context.set_context(device_id=device_id)
 
-    context.reset_auto_parallel_context()
     context.set_auto_parallel_context(parallel_mode=parallel_mode,
                                     gradients_mean=True,
                                     device_num=rank_size,

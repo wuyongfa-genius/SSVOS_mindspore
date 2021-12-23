@@ -36,7 +36,7 @@ class MyModelCheckpoint(Callback):
 
         # write operation is not safe when in distribute training,
         # so we need to make independent dirs per device
-        self.directory = directory.rstrip('/') + f'_device{dist.get_rank()}'
+        self.directory = directory
         os.makedirs(self.directory, exist_ok=True)
 
     def _save_ckpt(self, cb_params, force=False):
@@ -84,7 +84,7 @@ class MindSightLoggerCallback(Callback):
         # write operation is not safe when in distribute training,
         # so we need to make independent dirs per device
         if master_only:
-            self.directory = directory.rstrip('/')
+            self.directory = directory
             os.makedirs(self.directory, exist_ok=True)
 
         self._temp_optimizer = None
