@@ -1,9 +1,10 @@
 """Dataset to load kinetics-400 dataset."""
+# from decord import VideoReader
 import os
 
 import numpy as np
 from PIL import Image
-from decord import VideoReader
+from ssvos.datasets.opencv_video_reader import VideoReader
 from ssvos.datasets.transforms import (Compose, RandomResizedCrop, RandomHorizontalFlip,
                          ToTensor, Normalize)
 
@@ -64,12 +65,15 @@ class VideoDataset:
                  ann_file,
                  num_frames=8,
                  frame_interval=8,
-                 out_of_bound_opt='loop'):
+                 out_of_bound_opt='loop',
+                 video_reader='opencv'):
+        assert video_reader in ['opencv', 'decord']
         self.root = root
         self.ann_file = ann_file
         self.num_frames = num_frames
         self.frame_interval = frame_interval
         self.out_of_bound_opt = out_of_bound_opt
+        self.video_reader = video_reader
 
         self.all_video_paths = self._get_all_video_paths()
 
@@ -88,16 +92,22 @@ class VideoDataset:
 
         return all_video_paths
 
-    def _init_video_reader(self, file_path, num_threads=4):
+    def _init_decord_video_reader(self, file_path, num_threads=4):
         with open(file_path, 'rb') as f:
             container = VideoReader(f, num_threads=num_threads)
 
         return container
+    
+    def _init_opencv_video_reader(self, file_path, cache_capacity=10):
+        return VideoReader(file_path, cache_capacity=cache_capacity)
 
     def __getitem__(self, idx):
         video_path = self.all_video_paths[idx]
         video_full_path = os.path.join(self.root, video_path)
-        container = self._init_video_reader(video_full_path)
+        if self.video_reader == 'opencv':
+            container = self._init_opencv_video_reader(video_full_path)
+        elif self.video_reader == 'decord':
+            container = self._init_decord_video_reader(video_full_path)
         total_frames = len(container)
         # get clip offsets
         clip_offsets = _get_clip_offsets(total_frames, self.num_frames, self.frame_interval, 2)
@@ -110,7 +120,21 @@ class VideoDataset:
             raise ValueError('Illegal out_of_bound option.')
         # load frame
         frame_inds = np.squeeze(frame_inds)
-        frames = container.get_batch(frame_inds).asnumpy()  # N,H,W,3
+        if self.video_reader == 'opencv':
+            ### opencv video reader ##################################
+            frames = []
+            for frame_ind in frame_inds:
+                cur_frame = container[frame_ind]
+                # last frame may be None in OpenCV
+                while isinstance(cur_frame, type(None)):
+                    frame_ind -= 1
+                    cur_frame = container[frame_ind]
+                frames.append(cur_frame)
+            frames = np.array(frames)
+            frames = frames[:, :, :, ::-1] # BGR2RGB
+        elif self.video_reader == 'decord':
+            ### decord video reader ###################################
+            frames = container.get_batch(frame_inds).asnumpy()  # N,H,W,3
         del container # remember to delete container
         _clip1, _clip2 = frames[:self.num_frames], frames[self.num_frames:]
         # augmentation
