@@ -1,0 +1,4 @@
+decord
+pillow
+numpy
+tqdm
