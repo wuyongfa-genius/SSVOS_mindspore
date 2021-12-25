@@ -1,5 +1,6 @@
 """Some distribute training utils."""
 import os
+
 from mindspore import context
 from mindspore.context import ParallelMode
 from mindspore import communication as dist

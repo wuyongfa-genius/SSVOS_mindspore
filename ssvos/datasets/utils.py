@@ -5,6 +5,7 @@ import os
 import numpy as np
 from mindspore.dataset.vision import Inter
 from mindspore.dataset import GeneratorDataset
+from mindspore import communication as dist
 
 augment_error_message = "img should be PIL image. Got {}. Use Decode() for encoded data or ToPIL() for decoded data."
 
@@ -103,7 +104,7 @@ class DataLoader:
         self.column_names = column_names
         self.distributed = distributed
 
-        self.max_rowsize = kwargs.get('max_rowsize', 64)
+        self.max_rowsize = kwargs.get('max_rowsize', 16)
     
     def build_dataloader(self):
         # get or set col names
@@ -113,8 +114,8 @@ class DataLoader:
             item_len = len(example_item)
             col_names = [f'col_{i}' for i in range(item_len)]
         if self.distributed:
-            rank_size = int(os.getenv("RANK_SIZE", '1'))
-            rank_id = int(os.getenv('RANK_ID', '0'))
+            rank_size = dist.get_group_size()
+            rank_id = dist.get_rank()
             data_generator = GeneratorDataset(self.dataset,
                                             column_names=col_names,
                                             num_parallel_workers=self.num_workers,

@@ -1,16 +1,16 @@
 """Implement some callbacks frequently used"""
-from inspect import getargs
 import os
 import time
 import numpy as np
 from mindspore import Tensor
 from mindspore.nn.optim import Optimizer
-from mindspore import log as logger
 from mindspore.parallel._cell_wrapper import destroy_allgather_cell
 from mindspore import communication as dist
 from mindspore.train.callback import Callback
 from mindspore.train.summary import SummaryRecord
 from mindspore.train.serialization import save_checkpoint
+from ssvos.utils.log_utils import master_only_info
+from mindspore import log as logger
 
 
 class MyModelCheckpoint(Callback):
@@ -21,7 +21,8 @@ class MyModelCheckpoint(Callback):
                  prefix='ckpt',
                  master_only=True,
                  by_epoch=True,
-                 get_network_fn=None
+                 get_network_fn=None,
+                 rank=0
                  ):
         super().__init__()
         assert master_only, "Make sure that you only write at master device"
@@ -30,6 +31,7 @@ class MyModelCheckpoint(Callback):
         self.master_only = master_only
         self.by_epoch = by_epoch
         self.get_network_fn = get_network_fn
+        self.rank = rank
 
         self._append_dict = append_dict
         self._last_epoch = 0
@@ -37,13 +39,15 @@ class MyModelCheckpoint(Callback):
         # write operation is not safe when in distribute training,
         # so we need to make independent dirs per device
         self.directory = directory
-        os.makedirs(self.directory, exist_ok=True)
+        self.rank = rank
+        if rank == 0:
+            os.makedirs(self.directory, exist_ok=True)
 
     def _save_ckpt(self, cb_params, force=False):
         cur_epoch = cb_params.cur_epoch_num
         global_step = cb_params.cur_step_num
         if cur_epoch == self._last_epoch + self.interval or force:
-            logger.info("[INFO] Start saving checkpoint...")
+            master_only_info("[INFO] Start saving checkpoint...", rank=self.rank)
             ckpt_path = os.path.join(
                 self.directory, f'{self.prefix}_epoch_{cur_epoch}.ckpt')
             if self.get_network_fn is not None:
@@ -54,18 +58,18 @@ class MyModelCheckpoint(Callback):
             self._append_dict.update(epoch=cur_epoch)
             self._append_dict.update(global_step=global_step)
             save_checkpoint(network, ckpt_path, append_dict=self._append_dict)
-            logger.info(f'[INFO] Checkpoint saved at {ckpt_path}.')
+            master_only_info(f'[INFO] Checkpoint saved at {ckpt_path}.', rank=self.rank)
             # update last epoch
             self._last_epoch = cur_epoch
 
     def epoch_end(self, run_context):
         cb_params = run_context.original_args()
-        if dist.get_rank() == 0:
+        if self.rank == 0:
             self._save_ckpt(cb_params)
 
     def end(self, run_context):
         cb_params = run_context.original_args()
-        if dist.get_rank() == 0:
+        if self.rank == 0:
             self._save_ckpt(cb_params, force=True)
         destroy_allgather_cell()
 
@@ -74,17 +78,19 @@ class MindSightLoggerCallback(Callback):
     def __init__(self,
                  directory,
                  log_interval=1,
-                 master_only=True
+                 master_only=True,
+                 rank = 0
                  ):
         super().__init__()
         assert master_only, "Make sure that you only write at master device"
         self.log_interval = log_interval
         self.master_only = master_only
+        self.rank = rank
 
         # write operation is not safe when in distribute training,
         # so we need to make independent dirs per device
-        if master_only:
-            self.directory = directory
+        self.directory = directory
+        if rank == 0:
             os.makedirs(self.directory, exist_ok=True)
 
         self._temp_optimizer = None
@@ -93,14 +99,14 @@ class MindSightLoggerCallback(Callback):
 
     def __enter__(self):
         # init your summary record in here, when the train script run, it will be inited before training
-        if dist.get_rank() == 0:
+        if self.rank == 0:
             self.summary_record = SummaryRecord(self.directory)
         return self
 
     def __exit__(self, *exc_args):
         # Note: you must close the summary record, it will release the process pool resource
         # else your training script will not exit from training.
-        if dist.get_rank() == 0:
+        if self.rank == 0:
             self.summary_record.close()
 
     def _get_optimizer(self, cb_params):
@@ -198,23 +204,26 @@ class MindSightLoggerCallback(Callback):
         cb_params = run_context.original_args()
         global_step = cb_params.cur_step_num
         if global_step == self._last_step + self.log_interval:
-            if dist.get_rank() == 0:
-                cur_lr = self._get_optimizer(cb_params).learning_rate
+            if self.rank == 0:
+                cur_lr = self._get_optimizer(cb_params).get_lr()
                 loss = self._get_loss(cb_params)
                 self.summary_record.add_value(
-                    'scalar', 'global_step', global_step)
-                self.summary_record.add_value('scalar', 'loss', loss)
-                self.summary_record.add_value('scalar', 'lr', cur_lr)
+                    'scalar', 'global_step', Tensor(global_step))
+                self.summary_record.add_value('scalar', 'loss', Tensor(loss))
+                self.summary_record.add_value('scalar', 'lr', Tensor(cur_lr))
+                self.summary_record.record(global_step)
             self._last_step = global_step
 
 
 class ConsoleLoggerCallBack(Callback):
     def __init__(self,
                  log_interval=1,
-                 master_only=True):
+                 master_only=True,
+                 rank=0):
         super().__init__()
         assert master_only, "Make sure that you only write at master device"
         self.log_interval = log_interval
+        self.rank = rank
 
         self._temp_optimizer = None
         self._is_parse_loss_success = True
@@ -318,11 +327,10 @@ class ConsoleLoggerCallBack(Callback):
         epoch = cb_params.cur_epoch_num
         global_step = cb_params.cur_step_num
         step = (global_step - 1) % batch_num + 1
-        cur_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+        # cur_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
 
         if global_step == self._last_step + self.log_interval:
-            cur_lr = self._get_optimizer(cb_params).learning_rate.data
-            cur_lr = float(cur_lr.asnumpy())
+            cur_lr = self._get_optimizer(cb_params).get_lr()
             loss = self._get_loss(cb_params)
             if isinstance(loss, (tuple, list)):
                 if isinstance(loss[0], Tensor) and isinstance(loss[0].asnumpy(), np.ndarray):
@@ -331,8 +339,8 @@ class ConsoleLoggerCallBack(Callback):
             if isinstance(loss, Tensor) and isinstance(loss.asnumpy(), np.ndarray):
                 loss = np.mean(loss.asnumpy())
 
-            log_str = f'{cur_time} - Epoch [{epoch}][{step}/{batch_num}] lr: {cur_lr}, loss: {loss}'
-            logger.info(log_str)
+            log_str = f' Epoch [{epoch}][{step}/{batch_num}] lr: {cur_lr:}, loss: {loss}'
+            master_only_info(log_str, rank=self.rank)
             self._last_step = global_step
 
         
