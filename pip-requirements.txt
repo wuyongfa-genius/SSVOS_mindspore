@@ -1,4 +1,4 @@
-decord
+decord-0.6.0-py3-none-manylinux2010_x86_64.whl
 pillow
 numpy
 tqdm
