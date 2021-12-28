@@ -34,7 +34,7 @@ def add_args():
     # dataset
     parser.add_argument('--data_url', type=str,
                         required=True, help='dataset root path in obs')
-    parser.add_argument('--ann_file', type=str, default='.',
+    parser.add_argument('--ann_file', type=str, default='ytvos_2018_raw_frames.txt',
                         help='path wrt to data_url to annotation file')
     parser.add_argument('--num_frames', type=int, default=4, help='how many frames in a clip.')
     # work dir and log args
@@ -62,7 +62,7 @@ def add_args():
     parser.add_argument('--weight_decay', type=float,
                         default=1e-5, help='weight decay')
     parser.add_argument('--warmup_epochs', type=int,
-                        default=10, help='warmup epochs.')
+                        default=5, help='warmup epochs.')
 
     return parser.parse_args()
 
@@ -87,7 +87,8 @@ def main():
     ## init your train dataloader here
     # download dataset from obs to cache if train on ModelArts
     master_only_info('[INFO] Copying dataset from obs to ModelArts...', rank=rank)
-    mox.file.copy_parallel(src_url=args.data_url, dst_url=MODELARTS_DATA_DIR)
+    if rank == 0:
+        mox.file.copy_parallel(src_url=args.data_url, dst_url=MODELARTS_DATA_DIR)
     master_only_info('[INFO] Done. Start training...', rank=rank)
     train_dataset = RawFrameDataset(MODELARTS_DATA_DIR, args.ann_file, args.num_frames)
     train_dataloader = DataLoader(train_dataset, args.batch_size, args.num_workers,
@@ -117,7 +118,8 @@ def main():
     global_step = 0
     if args.resume_from is not None:
         master_only_info('[INFO] Copying saved ckpts from OBS to ModelArts...', rank=rank)
-        mox.file.copy_parallel(src_url=os.path.join(args.train_url, 'ckpts', args.resume_from), dst_url=MODELARTS_PRETRAINED_DIR)
+        if rank == 0:
+            mox.file.copy_parallel(src_url=os.path.join(args.train_url, 'ckpts', args.resume_from), dst_url=MODELARTS_PRETRAINED_DIR)
         master_only_info('[INFO] Done.', rank=rank)
         ckpt = load_checkpoint(os.path.join(MODELARTS_PRETRAINED_DIR, args.resume_from))
         if 'epoch' in ckpt.keys():
@@ -148,8 +150,9 @@ def main():
 
     # upload ckpts and logs from ModelArts to obs
     master_only_info("[INFO] Copying workdir contents from ModelArts to OBS...", rank=rank)
-    mox.file.copy_parallel(
-                src_url=MODELARTS_WORK_DIR, dst_url=args.train_url)
+    if rank == 0:
+        mox.file.copy_parallel(
+                    src_url=MODELARTS_WORK_DIR, dst_url=args.train_url)
     master_only_info("[INFO] Done.", rank=rank)
 
 
