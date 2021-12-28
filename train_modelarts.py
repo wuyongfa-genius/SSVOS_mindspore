@@ -87,8 +87,9 @@ def main():
     ## init your train dataloader here
     # download dataset from obs to cache if train on ModelArts
     master_only_info('[INFO] Copying dataset from obs to ModelArts...', rank=rank)
-    if rank == 0:
-        mox.file.copy_parallel(src_url=args.data_url, dst_url=MODELARTS_DATA_DIR)
+    mox.file.copy_parallel(src_url=args.data_url, dst_url=MODELARTS_DATA_DIR)
+    master_only_info('[INFO] Files and Dirs under dataset root:', rank=rank)
+    master_only_info(f'[INFO] {os.listdir(MODELARTS_DATA_DIR)}')
     master_only_info('[INFO] Done. Start training...', rank=rank)
     train_dataset = RawFrameDataset(MODELARTS_DATA_DIR, args.ann_file, args.num_frames)
     train_dataloader = DataLoader(train_dataset, args.batch_size, args.num_workers,
@@ -118,8 +119,7 @@ def main():
     global_step = 0
     if args.resume_from is not None:
         master_only_info('[INFO] Copying saved ckpts from OBS to ModelArts...', rank=rank)
-        if rank == 0:
-            mox.file.copy_parallel(src_url=os.path.join(args.train_url, 'ckpts', args.resume_from), dst_url=MODELARTS_PRETRAINED_DIR)
+        mox.file.copy_parallel(src_url=os.path.join(args.train_url, 'ckpts', args.resume_from), dst_url=MODELARTS_PRETRAINED_DIR)
         master_only_info('[INFO] Done.', rank=rank)
         ckpt = load_checkpoint(os.path.join(MODELARTS_PRETRAINED_DIR, args.resume_from))
         if 'epoch' in ckpt.keys():
@@ -150,9 +150,8 @@ def main():
 
     # upload ckpts and logs from ModelArts to obs
     master_only_info("[INFO] Copying workdir contents from ModelArts to OBS...", rank=rank)
-    if rank == 0:
-        mox.file.copy_parallel(
-                    src_url=MODELARTS_WORK_DIR, dst_url=args.train_url)
+    mox.file.copy_parallel(
+                src_url=MODELARTS_WORK_DIR, dst_url=args.train_url)
     master_only_info("[INFO] Done.", rank=rank)
 
 
