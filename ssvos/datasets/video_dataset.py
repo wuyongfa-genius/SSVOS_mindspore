@@ -5,6 +5,7 @@ import os
 import numpy as np
 from PIL import Image
 from ssvos.datasets.opencv_video_reader import VideoReader
+# from decord import VideoReader
 from ssvos.datasets.transforms import (Compose, RandomResizedCrop, RandomHorizontalFlip,
                          ToTensor, Normalize)
 

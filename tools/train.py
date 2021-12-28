@@ -119,7 +119,7 @@ def main():
         load_param_into_net(train_net, ckpt)
         master_only_info("[INFO] Checkpoint loaded!", rank=rank)
     # set amp_level to 'O2' to use fp16 with dynamic loss scale
-    model = Model_with_start_states(train_net, amp_level='O0', boost_level='O0',
+    model = Model_with_start_states(train_net, amp_level='O0',
                                     start_epoch=start_epoch, start_step=global_step)
 
     # init callbacks

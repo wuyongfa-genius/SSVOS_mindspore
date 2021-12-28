@@ -21,9 +21,9 @@ def _transfer_tensor_to_tuple(inputs):
 
 class Model_with_start_states(Model):
     def __init__(self, network, loss_fn=None, optimizer=None, metrics=None, eval_network=None,
-                 eval_indexes=None, amp_level="O0", boost_level="O0", start_epoch=0, start_step=0, **kwargs):
+                 eval_indexes=None, amp_level="O0", start_epoch=0, start_step=0, **kwargs):
         super().__init__(network, loss_fn=loss_fn, optimizer=optimizer, metrics=metrics, eval_network=eval_network,
-                         eval_indexes=eval_indexes, amp_level=amp_level, boost_level=boost_level, **kwargs)
+                         eval_indexes=eval_indexes, amp_level=amp_level, **kwargs)
         self.start_epoch = start_epoch
         self.start_step = start_step
     

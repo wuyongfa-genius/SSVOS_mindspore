@@ -5,10 +5,10 @@ from PIL import Image
 import numpy as np
 from .utils import crop, resize
 from mindspore.dataset.vision import py_transforms as VPT, Inter
-from mindspore.dataset.transforms import py_transforms as TPT
+# from mindspore.dataset.transforms import py_transforms as TPT
 
 
-class Compose(TPT.PyTensorOperation):
+class Compose:
     def __init__(self, transforms):
         super().__init__()
         self.transforms = transforms
@@ -20,7 +20,7 @@ class Compose(TPT.PyTensorOperation):
         return clip
 
 
-class RandomResizedCrop(TPT.PyTensorOperation):
+class RandomResizedCrop:
     """Randomly crop every frame in the clip and resize it to a given size.
 
     Args:
@@ -100,7 +100,7 @@ class RandomResizedCrop(TPT.PyTensorOperation):
         return cropped_frames
 
 
-class RandomHorizontalFlip(TPT.PyTensorOperation):
+class RandomHorizontalFlip:
     """Randomly flip the frames in the clip horizontally with a given probability.
 
     Args:

@@ -390,11 +390,9 @@ class DataLoader:
                                               max_rowsize=self.max_rowsize)
         if self.transforms is not None:
             data_generator = data_generator.map(operations=self.transforms,
-                                                num_parallel_workers=self.num_workers,
-                                                max_rowsize=self.max_rowsize)
+                                                num_parallel_workers=self.num_workers)
         dataloader = data_generator.batch(batch_size=self.batch_size,
-                                          drop_remainder=self.drop_last,
-                                          max_rowsize=self.max_rowsize)
+                                          drop_remainder=self.drop_last)
 
         return dataloader
 
