@@ -135,7 +135,7 @@ def main():
     # init callbacks
     ckpt_dir = os.path.join(MODELARTS_WORK_DIR, 'ckpts')
     ckpt_cb = MyModelCheckpoint(ckpt_dir, interval=args.save_interval)
-    log_dir = os.path.join(args.train_url, 'logs')
+    log_dir = os.path.join(MODELARTS_WORK_DIR, 'logs')
     mindsight_cb = MindSightLoggerCallback(
         log_dir, log_interval=args.log_interval)
     console_log_cb = ConsoleLoggerCallBack(log_interval=args.log_interval)
