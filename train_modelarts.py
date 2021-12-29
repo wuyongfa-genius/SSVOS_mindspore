@@ -4,7 +4,7 @@ import numpy as np
 import os
 import moxing as mox
 
-from mindspore import context, nn, set_seed
+from mindspore import context, nn, set_seed, communication as dist
 from mindspore.train.serialization import load_checkpoint, load_param_into_net
 from ssvos.datasets.utils import DataLoader
 from ssvos.utils.callbacks import (ConsoleLoggerCallBack,
@@ -89,7 +89,6 @@ def main():
     master_only_info('[INFO] Copying dataset from obs to ModelArts...', rank=rank)
     mox.file.copy_parallel(src_url=args.data_url, dst_url=MODELARTS_DATA_DIR)
     master_only_info('[INFO] Files and Dirs under dataset root:', rank=rank)
-    master_only_info(f'[INFO] {os.listdir(MODELARTS_DATA_DIR)}')
     master_only_info('[INFO] Done. Start training...', rank=rank)
     train_dataset = RawFrameDataset(MODELARTS_DATA_DIR, args.ann_file, args.num_frames)
     train_dataloader = DataLoader(train_dataset, args.batch_size, args.num_workers,
@@ -136,7 +135,7 @@ def main():
     # init callbacks
     ckpt_dir = os.path.join(MODELARTS_WORK_DIR, 'ckpts')
     ckpt_cb = MyModelCheckpoint(ckpt_dir, interval=args.save_interval)
-    log_dir = os.path.join(args.workdir, 'logs')
+    log_dir = os.path.join(args.train_url, 'logs')
     mindsight_cb = MindSightLoggerCallback(
         log_dir, log_interval=args.log_interval)
     console_log_cb = ConsoleLoggerCallBack(log_interval=args.log_interval)
