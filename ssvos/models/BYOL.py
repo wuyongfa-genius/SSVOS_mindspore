@@ -2,8 +2,7 @@
 import copy
 from mindspore import nn, ops
 from mindspore.ops import stop_gradient
-from ssvos.utils.module_utils import NetWithSymmetricLoss
-from ssvos.utils.loss_utils import CosineSimilarityLoss
+from  mindspore import ms_function
 
 
 class BYOL(nn.Cell):
@@ -48,13 +47,24 @@ class BYOL(nn.Cell):
             momentum_params.set_data(self.momentum * \
                 old_params + (1-self.momentum)*up_params)
 
+    @ms_function
+    def _forward_online_encoder(self, x):
+        pred = self.prediction_mlp(self.online_encoder(x))
+
+        return pred
+    
+    def _forward_momentum_encoder(self, x):
+        target = self.momentum_encoder(x)
+
+        return target
+
     def construct(self, x1, x2):
-        online_pred1 = self.prediction_mlp(self.online_encoder(x1))
-        online_pred2 = self.prediction_mlp(self.online_encoder(x2))
+        online_pred1 = self._forward_online_encoder(x1)
+        online_pred2 = self._forward_online_encoder(x2)
         # NOTE here should be in no_grad mode
         self._update_momentum_params()
-        target_proj1 = stop_gradient(self.momentum_encoder(x1))
-        target_proj2 = stop_gradient(self.momentum_encoder(x2))
+        target_proj1 = stop_gradient(self._forward_momentum_encoder(x1))
+        target_proj2 = stop_gradient(self._forward_momentum_encoder(x2))
 
         return online_pred1, online_pred2, target_proj1, target_proj2
 
@@ -63,6 +73,8 @@ class BYOL(nn.Cell):
 #     from ssvos.models.backbones import VideoTransformerNetwork
 #     from mindspore import context
 #     from mindspore.common.initializer import initializer, Normal
+#     from ssvos.utils.module_utils import NetWithSymmetricLoss
+#     from ssvos.utils.loss_utils import CosineSimilarityLoss
 
 #     context.set_context(device_target='GPU', mode=context.PYNATIVE_MODE)
 

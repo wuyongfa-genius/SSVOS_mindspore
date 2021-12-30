@@ -13,8 +13,7 @@ def init_dist(parallel_mode=ParallelMode.DATA_PARALLEL):
 
     context.set_auto_parallel_context(parallel_mode=parallel_mode,
                                     gradients_mean=True,
-                                    device_num=rank_size,
-                                    parameter_broadcast=True)
+                                    device_num=rank_size)
     dist.init()
 
     return dist.get_rank(), dist.get_group_size()

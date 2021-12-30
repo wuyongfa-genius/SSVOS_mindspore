@@ -19,9 +19,6 @@ from ssvos.utils.module_utils import NetWithSymmetricLoss
 from ssvos.utils.loss_utils import CosineSimilarityLoss
 from ssvos.utils.log_utils import master_only_info, set_logger_level_to
 
-MODELARTS_DATA_DIR = '/cache/dataset'
-MODELARTS_PRETRAINED_DIR = '/cache/pretrained'
-MODELARTS_WORK_DIR = '/cache/output'
 
 def add_args():
     parser = argparse.ArgumentParser(
@@ -68,13 +65,16 @@ def add_args():
 
 
 def main():
+    MODELARTS_DATA_DIR = '/cache/dataset'
+    MODELARTS_PRETRAINED_DIR = '/cache/pretrained'
+    MODELARTS_WORK_DIR = '/cache/output'
     args = add_args()
     set_logger_level_to()
     # set a global seed
     np.random.seed(2563)
     set_seed(2563)
     # set to graph mode
-    context.set_context(mode=context.PYNATIVE_MODE,
+    context.set_context(mode=context.PYNATIVE_MODE, pynative_synchronize=True,
                         device_target=args.device_target)
     # init dist
     if args.device_target != "Ascend" and args.device_target != "GPU":
@@ -84,11 +84,13 @@ def main():
     else:
         rank, group_size = 0, 1
 
+    MODELARTS_DATA_DIR = os.path.join(MODELARTS_DATA_DIR, f'_{rank}')
+    MODELARTS_PRETRAINED_DIR = os.path.join(MODELARTS_PRETRAINED_DIR, f'_{rank}')
+    MODELARTS_WORK_DIR = os.path.join(MODELARTS_WORK_DIR, f'_{rank}')
     ## init your train dataloader here
     # download dataset from obs to cache if train on ModelArts
     master_only_info('[INFO] Copying dataset from obs to ModelArts...', rank=rank)
     mox.file.copy_parallel(src_url=args.data_url, dst_url=MODELARTS_DATA_DIR)
-    master_only_info('[INFO] Files and Dirs under dataset root:', rank=rank)
     master_only_info('[INFO] Done. Start training...', rank=rank)
     train_dataset = RawFrameDataset(MODELARTS_DATA_DIR, args.ann_file, args.num_frames)
     train_dataloader = DataLoader(train_dataset, args.batch_size, args.num_workers,
@@ -143,9 +145,9 @@ def main():
     # you can define a validation callback to validate
 
     # train network
-    master_only_info("[INFO] Start training...")
+    master_only_info("[INFO] Start training...", rank=rank)
     model.train(args.epoch_size, train_dataloader, callbacks=callbacks)
-    master_only_info("[INFO] TRAINING DONE!")
+    master_only_info("[INFO] TRAINING DONE!", rank=rank)
 
     # upload ckpts and logs from ModelArts to obs
     master_only_info("[INFO] Copying workdir contents from ModelArts to OBS...", rank=rank)
