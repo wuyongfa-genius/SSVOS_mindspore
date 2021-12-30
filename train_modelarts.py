@@ -74,7 +74,7 @@ def main():
     np.random.seed(2563)
     set_seed(2563)
     # set to graph mode
-    context.set_context(mode=context.PYNATIVE_MODE, pynative_synchronize=True,
+    context.set_context(mode=context.PYNATIVE_MODE,
                         device_target=args.device_target)
     # init dist
     if args.device_target != "Ascend" and args.device_target != "GPU":
