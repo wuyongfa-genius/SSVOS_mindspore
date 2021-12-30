@@ -63,23 +63,25 @@ class BYOL(nn.Cell):
         online_pred2 = self._forward_online_encoder(x2)
         # NOTE here should be in no_grad mode
         self._update_momentum_params()
-        target_proj1 = stop_gradient(self._forward_momentum_encoder(x1))
-        target_proj2 = stop_gradient(self._forward_momentum_encoder(x2))
+        # target_proj1 = stop_gradient(self._forward_momentum_encoder(x1))
+        # target_proj2 = stop_gradient(self._forward_momentum_encoder(x2))
+        target_proj1 = self._forward_momentum_encoder(x1)
+        target_proj2 = self._forward_momentum_encoder(x2)
 
         return online_pred1, online_pred2, target_proj1, target_proj2
 
 
-# if __name__=="__main__":
-#     from ssvos.models.backbones import VideoTransformerNetwork
-#     from mindspore import context
-#     from mindspore.common.initializer import initializer, Normal
-#     from ssvos.utils.module_utils import NetWithSymmetricLoss
-#     from ssvos.utils.loss_utils import CosineSimilarityLoss
+if __name__=="__main__":
+    from ssvos.models.backbones import VideoTransformerNetwork
+    from mindspore import context
+    from mindspore.common.initializer import initializer, Normal
+    from ssvos.utils.module_utils import NetWithSymmetricLoss
+    from ssvos.utils.loss_utils import CosineSimilarityLoss
 
-#     context.set_context(device_target='GPU', mode=context.PYNATIVE_MODE)
+    context.set_context(device_target='GPU', mode=context.PYNATIVE_MODE)
 
-#     vtn = VideoTransformerNetwork()
-#     byol = NetWithSymmetricLoss(net=BYOL(vtn), loss_fn=CosineSimilarityLoss())
-#     dummy_input_1 = initializer(Normal(), (2,3,8,224,224))
-#     dummy_input_2 = dummy_input_1.copy()
-#     print(byol(dummy_input_1, dummy_input_2))
+    vtn = VideoTransformerNetwork()
+    byol = NetWithSymmetricLoss(net=BYOL(vtn), loss_fn=CosineSimilarityLoss())
+    dummy_input_1 = initializer(Normal(), (2,3,8,224,224))
+    dummy_input_2 = dummy_input_1.copy()
+    print(byol(dummy_input_1, dummy_input_2))
