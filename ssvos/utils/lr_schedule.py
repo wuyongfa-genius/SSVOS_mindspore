@@ -15,8 +15,8 @@ class CosineDecayLRWithWarmup(LearningRateSchedule):
         self.max_lr = max_lr
         self.min_lr = min_lr
         self.total_steps = total_steps
-        self.warmup_steps = warmup_steps
-        self.decay_steps = total_steps-warmup_steps
+        self.warmup_steps = float(warmup_steps)
+        self.decay_steps = float(total_steps-warmup_steps)
         self.by_epoch = by_epoch
         self.math_pi = math.pi
         self.delta = max_lr - min_lr
