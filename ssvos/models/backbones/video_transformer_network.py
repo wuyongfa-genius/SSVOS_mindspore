@@ -33,6 +33,8 @@ class VideoTransformerNetwork(nn.Cell):
         self.reshape = ops.Reshape()
         self.cat = ops.Concat(axis=1) # cat along seq axis
 
+        self._init_weights()
+
     def _init_weights(self):
         init_param(self.pos_emb, TruncatedNormal, sigma=.02)
         init_param(self.global_token, TruncatedNormal, sigma=.02)

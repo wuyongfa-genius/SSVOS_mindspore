@@ -55,13 +55,13 @@ def add_args():
     parser.add_argument('--optimizer', type=str, default='Momentum', help='Optimizer, Currently only\
                     Momentum is supported.')
     parser.add_argument('--base_lr', type=float,
-                        default=1., help='base learning rate.')
+                        default=0.2, help='base learning rate.')
     parser.add_argument('--lr_schedule', type=str,
                         default='cosine', help='Learning rate decay schedule')
     parser.add_argument('--weight_decay', type=float,
                         default=1e-5, help='weight decay')
     parser.add_argument('--warmup_epochs', type=int,
-                        default=15, help='warmup epochs.')
+                        default=5, help='warmup epochs.')
 
     return parser.parse_args()
 

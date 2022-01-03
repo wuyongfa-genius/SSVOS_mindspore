@@ -1,7 +1,8 @@
 """Implement BYOL model in MindSpore."""
 import copy
 from mindspore import nn, ops
-from mindspore.ops import stop_gradient
+from ssvos.utils.param_utils import default_weight_init
+# from mindspore.ops import stop_gradient
 from  mindspore import ms_function
 
 
@@ -14,18 +15,28 @@ class BYOL(nn.Cell):
         feat_dim = getattr(encoder, 'feat_dim', 2048)
 
         projection_mlp = self._build_mlp(feat_dim, hidden_dim, out_dim)
-
         self.online_encoder = nn.SequentialCell([
             encoder,
             projection_mlp,
         ])
         self.momentum_encoder = copy.deepcopy(self.online_encoder)
-        # set momentum's param to requires no grad
-        for params in self.momentum_encoder.trainable_params():
-            params.requires_grad = False
-
         self.prediction_mlp = self._build_mlp(out_dim, hidden_dim, out_dim)
 
+        self._init_weights()
+
+    def _init_weights(self):
+        default_weight_init(self.online_encoder[-1])
+
+        # copy online encoder params to momentum encoder
+        for online_params, momentum_params in zip(self.online_encoder.get_parameters(),
+                                                  self.momentum_encoder.get_parameters()):
+            momentum_params.set_data(online_params.data)
+        # set momentum encoder's param to require no grad
+        for params in self.momentum_encoder.trainable_params():
+            params.requires_grad = False
+        
+        default_weight_init(self.prediction_mlp)
+    
     @staticmethod
     def _build_mlp(in_dim, hidden_dim, out_dim):
         return nn.SequentialCell([
@@ -71,17 +82,17 @@ class BYOL(nn.Cell):
         return online_pred1, online_pred2, target_proj1, target_proj2
 
 
-if __name__=="__main__":
-    from ssvos.models.backbones import VideoTransformerNetwork
-    from mindspore import context
-    from mindspore.common.initializer import initializer, Normal
-    from ssvos.utils.module_utils import NetWithSymmetricLoss
-    from ssvos.utils.loss_utils import CosineSimilarityLoss
+# if __name__=="__main__":
+#     from ssvos.models.backbones import VideoTransformerNetwork
+#     from mindspore import context
+#     from mindspore.common.initializer import initializer, Normal
+#     from ssvos.utils.module_utils import NetWithSymmetricLoss
+#     from ssvos.utils.loss_utils import CosineSimilarityLoss
 
-    context.set_context(device_target='GPU', mode=context.PYNATIVE_MODE)
+#     context.set_context(device_target='GPU', mode=context.PYNATIVE_MODE)
 
-    vtn = VideoTransformerNetwork()
-    byol = NetWithSymmetricLoss(net=BYOL(vtn), loss_fn=CosineSimilarityLoss())
-    dummy_input_1 = initializer(Normal(), (2,3,8,224,224))
-    dummy_input_2 = dummy_input_1.copy()
-    print(byol(dummy_input_1, dummy_input_2))
+#     vtn = VideoTransformerNetwork()
+#     byol = NetWithSymmetricLoss(net=BYOL(vtn), loss_fn=CosineSimilarityLoss())
+#     dummy_input_1 = initializer(Normal(), (2,3,8,224,224))
+#     dummy_input_2 = dummy_input_1.copy()
+#     print(byol(dummy_input_1, dummy_input_2))

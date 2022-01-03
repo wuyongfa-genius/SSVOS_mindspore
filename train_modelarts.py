@@ -33,7 +33,7 @@ def add_args():
                         required=True, help='dataset root path in obs')
     parser.add_argument('--ann_file', type=str, default='ytvos_2018_raw_frames.txt',
                         help='path wrt to data_url to annotation file')
-    parser.add_argument('--num_frames', type=int, default=4, help='how many frames in a clip.')
+    parser.add_argument('--num_frames', type=int, default=8, help='how many frames in a clip.')
     # work dir and log args
     parser.add_argument('--train_url', type=str, required=True, help='work dir in which stores\
                     logs and ckpts, physically in obs')
@@ -42,9 +42,9 @@ def add_args():
     parser.add_argument('--save_interval', type=int,
                         default=1, help='How often to save ckpts')
     # training args and hyper params
-    parser.add_argument('--batch_size', type=int, default=12,
+    parser.add_argument('--batch_size', type=int, default=16,
                         help='batch_size.')
-    parser.add_argument('--num_workers', type=int, default=12,
+    parser.add_argument('--num_workers', type=int, default=8,
                         help='num workers to load dataset.')
     parser.add_argument('--epoch_size', type=int, default=100, help='epoch size for training, \
                     default is 100.')
@@ -59,7 +59,7 @@ def add_args():
     parser.add_argument('--weight_decay', type=float,
                         default=1e-5, help='weight decay')
     parser.add_argument('--warmup_epochs', type=int,
-                        default=5, help='warmup epochs.')
+                        default=10, help='warmup epochs.')
 
     return parser.parse_args()
 

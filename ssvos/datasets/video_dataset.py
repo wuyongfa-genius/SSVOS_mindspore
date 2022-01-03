@@ -179,7 +179,7 @@ class RawFrameDataset:
         self.all_frame_dirs = self._get_all_frame_dirs()
 
         self.transforms = Compose([
-            RandomResizedCrop(size=(224, 224), scale=(0.2, 1)),
+            RandomResizedCrop(size=(224, 224), scale=(0.6, 1)),
             RandomHorizontalFlip(),
             ToTensor(),
             Normalize()
