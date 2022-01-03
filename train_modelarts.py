@@ -4,7 +4,7 @@ import numpy as np
 import os
 import moxing as mox
 
-from mindspore import context, nn, set_seed, communication as dist
+from mindspore import context, nn, set_seed
 from mindspore.train.serialization import load_checkpoint, load_param_into_net
 from ssvos.datasets.utils import DataLoader
 from ssvos.utils.callbacks import (ConsoleLoggerCallBack,
@@ -23,17 +23,12 @@ from ssvos.utils.log_utils import master_only_info, set_logger_level_to
 def add_args():
     parser = argparse.ArgumentParser(
         description="MindSpore ModelArts train script")
-    # enviornment args
-    parser.add_argument('--device_target', type=str, default='Ascend',
-                        help='Device target, Currently GPU, Ascend are supported.')
-    parser.add_argument('--distribute', type=bool, default=True,
-                        help='Run distributed training.')
     # dataset
     parser.add_argument('--data_url', type=str,
                         required=True, help='dataset root path in obs')
     parser.add_argument('--ann_file', type=str, default='ytvos_2018_raw_frames.txt',
                         help='path wrt to data_url to annotation file')
-    parser.add_argument('--num_frames', type=int, default=8, help='how many frames in a clip.')
+    parser.add_argument('--num_frames', type=int, default=12, help='how many frames in a clip.')
     # work dir and log args
     parser.add_argument('--train_url', type=str, required=True, help='work dir in which stores\
                     logs and ckpts, physically in obs')
@@ -74,15 +69,9 @@ def main():
     np.random.seed(2563)
     set_seed(2563)
     # set to graph mode
-    context.set_context(mode=context.PYNATIVE_MODE,
-                        device_target=args.device_target)
+    context.set_context(mode=context.PYNATIVE_MODE, device_target="Ascend")
     # init dist
-    if args.device_target != "Ascend" and args.device_target != "GPU":
-        raise ValueError("Unsupported device target.")
-    if args.distribute:
-        rank, group_size = init_dist()
-    else:
-        rank, group_size = 0, 1
+    rank, group_size = init_dist()
 
     MODELARTS_DATA_DIR = os.path.join(MODELARTS_DATA_DIR, f'_{rank}')
     MODELARTS_PRETRAINED_DIR = os.path.join(MODELARTS_PRETRAINED_DIR, f'_{rank}')
@@ -94,7 +83,7 @@ def main():
     master_only_info('[INFO] Done. Start training...', rank=rank)
     train_dataset = RawFrameDataset(MODELARTS_DATA_DIR, args.ann_file, args.num_frames)
     train_dataloader = DataLoader(train_dataset, args.batch_size, args.num_workers,
-                                  shuffle=True, drop_last=True, distributed=args.distribute)
+                                  shuffle=True, drop_last=True, distributed=True)
     train_dataloader = train_dataloader.build_dataloader()
     master_only_info("[INFO] Dataset loaded!", rank=rank)
 

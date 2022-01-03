@@ -7,8 +7,8 @@ from mindspore import communication as dist
 
 
 def init_dist(parallel_mode=ParallelMode.DATA_PARALLEL):
-    device_id = int(os.getenv('DEVICE_ID', '0'))
-    rank_size = int(os.getenv('RANK_SIZE', '1'))
+    device_id = int(os.getenv('DEVICE_ID'))
+    rank_size = int(os.getenv('RANK_SIZE'))
     context.set_context(device_id=device_id)
 
     context.set_auto_parallel_context(parallel_mode=parallel_mode,
