@@ -45,7 +45,7 @@ def _get_clip_offsets(num_frames, clip_len, frame_interval=1, num_clips=1):
     else:
         clip_offsets = np.zeros((num_clips, ), dtype=np.int)
 
-    return clip_offsets
+    return clip_offsets.astype(np.int64)
 
 
 class VideoDataset:
