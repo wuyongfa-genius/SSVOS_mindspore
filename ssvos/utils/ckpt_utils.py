@@ -59,4 +59,18 @@ def resume_from_ckpt(model, optimizer, ckpt_path):
     load_param_into_net(model, ckpt)
     # load param into optimizer
     load_param_into_net(optimizer, ckpt)
-    
+
+
+def load_partial_param_into_net(model, ckpt_path, prefix=None):
+    assert os.path.exists(ckpt_path)
+    param_dict = load_checkpoint(ckpt_path)
+    if prefix is not None:
+        prefix_len = len(prefix)
+        partial_param = {}
+        for k, v in param_dict.items():
+            if k.startswith(prefix):
+                k = k[prefix_len:]
+                partial_param.update(**{k:v})
+        load_param_into_net(model, partial_param)
+    else:
+        load_param_into_net(model, param_dict)

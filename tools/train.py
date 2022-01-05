@@ -139,4 +139,31 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    from mindspore.train import save_checkpoint,load_checkpoint, load_param_into_net
+    from ssvos.models.backbones.resnet import CustomResNet
+    # main()
+    vtn = VideoTransformerNetwork(seqlength=8)
+    byol = BYOL(encoder=vtn)
+    criterion = CosineSimilarityLoss()
+    model = NetWithSymmetricLoss(byol, criterion)
+    lr = 0.1
+    lr_scheduler = CosineDecayLRWithWarmup(lr, min_lr=1e-5, total_steps=10*100,
+                                           warmup_steps=10*100)
+    # init your optimizer here
+    optimizer = nn.Momentum(model.trainable_params(), lr_scheduler, momentum=0.9,
+                            weight_decay=1e-5)
+    # init train net
+    train_net = nn.TrainOneStepCell(model, optimizer)
+    model = Model_with_start_states(train_net, amp_level='O0',
+                                    start_epoch=0, start_step=0)
+    save_checkpoint(model._train_network, 'full_model.ckpt')
+    param_dict = load_checkpoint('full_model.ckpt')
+    resnet = CustomResNet(depth=50)
+    resnet_param = {}
+    for k, v in param_dict.items():
+        if k.startswith('online_encoder.0.frame_feat_extractor.'):
+            k = k[38:]
+            resnet_param.update(**{k:v})
+    not_load_params = load_param_into_net(resnet, resnet_param)
+
+    

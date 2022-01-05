@@ -10,7 +10,7 @@ from ssvos.models.backbones.vision_transformer import TransformerEncoder
 
 class VideoTransformerNetwork(nn.Cell):
     def __init__(self, seqlength=8, d_model=2048,
-                 num_layers=3, num_heads=16, mlp_ratio=2.,
+                 num_layers=1, num_heads=16, mlp_ratio=2.,
                  dropout_embed=0., drop_mlp=0., drop_attn=0.,
                  frame_feat_extractor=ResNet, _2d_feat_extractor_depth=50):
         super().__init__()
