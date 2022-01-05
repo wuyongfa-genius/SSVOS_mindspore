@@ -81,7 +81,7 @@ def main():
         model = CustomResNet(depth=50)
         # copy pretrained weight from OBS to ModelArts
         log_info_func('[INFO] Copying saved ckpts from OBS to ModelArts...')
-        mox.file.copy(src_url=os.path.join(args.train_url, args.pretrained_weight), dst_url=MODELARTS_PRETRAINED_DIR)
+        mox.file.copy_parallel(src_url=args.train_url, dst_url=MODELARTS_PRETRAINED_DIR)
         log_info_func('[INFO] Done.')
         # load ckpt here
         ckpt_path = os.path.join(MODELARTS_PRETRAINED_DIR, args.pretrained_weight)

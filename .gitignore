@@ -131,3 +131,4 @@ dmypy.json
 # other file
 /rank_0
 /exps
+*.ckpt
