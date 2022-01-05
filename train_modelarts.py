@@ -28,14 +28,14 @@ def add_args():
                         required=True, help='dataset root path in obs')
     parser.add_argument('--ann_file', type=str, default='ytvos_2018_raw_frames.txt',
                         help='path wrt to data_url to annotation file')
-    parser.add_argument('--num_frames', type=int, default=12, help='how many frames in a clip.')
+    parser.add_argument('--num_frames', type=int, default=8, help='how many frames in a clip.')
     # work dir and log args
     parser.add_argument('--train_url', type=str, required=True, help='work dir in which stores\
                     logs and ckpts, physically in obs')
     parser.add_argument('--log_interval', type=int, default=1,
                         help='How often to print log infos')
     parser.add_argument('--save_interval', type=int,
-                        default=1, help='How often to save ckpts')
+                        default=5, help='How often to save ckpts')
     # training args and hyper params
     parser.add_argument('--batch_size', type=int, default=16,
                         help='batch_size.')
@@ -109,7 +109,7 @@ def main():
     global_step = 0
     if args.resume_from is not None:
         master_only_info('[INFO] Copying saved ckpts from OBS to ModelArts...', rank=rank)
-        mox.file.copy_parallel(src_url=os.path.join(args.train_url, 'ckpts', args.resume_from), dst_url=MODELARTS_PRETRAINED_DIR)
+        mox.file.copy(src_url=os.path.join(args.train_url, 'ckpts', args.resume_from), dst_url=MODELARTS_PRETRAINED_DIR)
         master_only_info('[INFO] Done.', rank=rank)
         ckpt = load_checkpoint(os.path.join(MODELARTS_PRETRAINED_DIR, args.resume_from))
         if 'epoch' in ckpt.keys():
@@ -125,11 +125,11 @@ def main():
 
     # init callbacks
     ckpt_dir = os.path.join(MODELARTS_WORK_DIR, 'ckpts')
-    ckpt_cb = MyModelCheckpoint(ckpt_dir, interval=args.save_interval)
+    ckpt_cb = MyModelCheckpoint(ckpt_dir, interval=args.save_interval, rank=rank)
     log_dir = os.path.join(MODELARTS_WORK_DIR, 'logs')
     mindsight_cb = MindSightLoggerCallback(
-        log_dir, log_interval=args.log_interval)
-    console_log_cb = ConsoleLoggerCallBack(log_interval=args.log_interval)
+        log_dir, log_interval=args.log_interval, rank=rank)
+    console_log_cb = ConsoleLoggerCallBack(log_interval=args.log_interval, rank=rank)
     callbacks = [console_log_cb, mindsight_cb, ckpt_cb]
     # you can define a validation callback to validate
 
