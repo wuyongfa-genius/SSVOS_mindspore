@@ -5,13 +5,14 @@ import os
 
 import numpy as np
 from PIL import Image
+from functools import partial
 from mindspore import nn, numpy as msnp, ops, context, log as logger
 from ssvos.datasets import (DAVIS_VAL, imwrite_indexed, norm_mask, default_palette,
                             DataLoader)
 from ssvos.models.backbones import CustomResNet
 from ssvos.utils.dist_utils import init_dist
 from ssvos.utils.attention import spatial_neighbor, masked_attention_efficient
-from tqdm import tqdm
+from ssvos.utils.log_utils import master_only_info, set_logger_level_to
 import moxing as mox
 
 MODELARTS_DATA_DIR = '/cache/dataset'
@@ -21,8 +22,6 @@ MODELARTS_WORK_DIR = '/cache/output'
 def add_args():
     parser = argparse.ArgumentParser(
         'Evaluation with video object segmentation on DAVIS 2017')
-    parser.add_argument('--device_target', type=str, default='Ascend',
-                        help='Device target, Currently GPU, Ascend are supported.')
     parser.add_argument('--distribute', type=bool, default=True,
                         help='Run distributed testing.')
     parser.add_argument('--pretrained_weight', default='',
@@ -60,19 +59,17 @@ def extract_feat(model: nn.Cell, frame):
 
 
 def main():
+    set_logger_level_to()
     args = add_args()
-    context.set_context(mode=context.GRAPH_MODE, device_target=args.device_target)
-    if args.device_target != "Ascend" and args.device_target != "GPU":
-        raise ValueError("Unsupported device target.")
-    if args.distribute:
-        # init dist
-        rank, group_size = init_dist()
-    else:
-        rank, group_size = 0, 1
+    # set to graph mode
+    context.set_context(mode=context.GRAPH_MODE, device_target="Ascend")
+    # init dist
+    rank, group_size = init_dist()
+    log_info_func = partial(master_only_info, rank=rank)
     ## download dataset from obs to cache if train on ModelArts
-    print('[INFO] Copying dataset from obs to ModelArts...')
+    log_info_func('[INFO] Copying dataset from obs to ModelArts...')
     mox.file.copy_parallel(src_url=args.data_url, dst_url=MODELARTS_DATA_DIR)
-    print('[INFO] Done. Start testing...')
+    log_info_func('[INFO] Done. Start testing...')
     # dataloader
     dataset = DAVIS_VAL(MODELARTS_DATA_DIR, out_stride=args.out_stride)
     seq_names = dataset.seq_names
@@ -82,9 +79,9 @@ def main():
     if args.arch == 'resnet50':
         model = CustomResNet(depth=50)
         # copy pretrained weight from OBS to ModelArts
-        print('[INFO] Copying saved ckpts from OBS to ModelArts...')
-        mox.file.copy_parallel(src_url=os.path.join(args.train_url, args.pretrained_weight), dst_url=MODELARTS_PRETRAINED_DIR)
-        print('[INFO] Done.')
+        log_info_func('[INFO] Copying saved ckpts from OBS to ModelArts...')
+        mox.file.copy(src_url=os.path.join(args.train_url, args.pretrained_weight), dst_url=MODELARTS_PRETRAINED_DIR)
+        log_info_func('[INFO] Done.')
         # load ckpt here
         # load weights into model here
         # set model to test mode
@@ -92,9 +89,6 @@ def main():
         # NOTE not sure that GRAPH_MODE needs this
         model.set_grad(False)
     ################################################################################
-    logger.info('Start testing...')
-    if rank == 0:
-        bar = tqdm(total=len(dataset))
     for seq_info, frames, first_seg, seg_ori in dataloader.create_tuple_iterator(num_epochs=1):
         # NOTE there is a batch dim when batch_size=1
         index, ori_h, ori_w = seq_info[0]
@@ -139,15 +133,11 @@ def main():
                 seg_tar).resize((int(ori_w.asnumpy()), int(ori_h.asnumpy())), 0))
             seg_name = os.path.join(seq_dir, f'{frame_index:05}.png')
             imwrite_indexed(seg_name, seg_tar)
-        if rank == 0:
-            bar.update(group_size)
-    if rank == 0:
-        bar.close()
-    logger.info(f'All videos has been tested, results saved at {MODELARTS_WORK_DIR}.')
+    log_info_func(f'All videos has been tested, results saved at {MODELARTS_WORK_DIR}.')
     
-    print('[INFO] Copying results from ModelArts to OBS...')
+    log_info_func('[INFO] Copying results from ModelArts to OBS...')
     mox.file.copy_parallel(src_url=MODELARTS_WORK_DIR, dst_url=args.train_url)
-    print('[INFO] ALL DONE.')
+    log_info_func('[INFO] ALL DONE.')
 
 
 if __name__ == "__main__":

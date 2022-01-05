@@ -76,6 +76,7 @@ def main():
     MODELARTS_DATA_DIR = os.path.join(MODELARTS_DATA_DIR, f'_{rank}')
     MODELARTS_PRETRAINED_DIR = os.path.join(MODELARTS_PRETRAINED_DIR, f'_{rank}')
     MODELARTS_WORK_DIR = os.path.join(MODELARTS_WORK_DIR, f'_{rank}')
+    os.makedirs(MODELARTS_WORK_DIR, exist_ok=True)
     ## init your train dataloader here
     # download dataset from obs to cache if train on ModelArts
     master_only_info('[INFO] Copying dataset from obs to ModelArts...', rank=rank)

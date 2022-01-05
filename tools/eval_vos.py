@@ -10,7 +10,6 @@ from ssvos.datasets import (DAVIS_VAL, imwrite_indexed, norm_mask, default_palet
 from ssvos.models.backbones import ResNet, CustomResNet
 from ssvos.utils.dist_utils import init_dist
 from ssvos.utils.attention import spatial_neighbor, masked_attention_efficient
-from tqdm import tqdm
 
 
 def add_args():
@@ -81,8 +80,6 @@ def main():
         model.set_grad(False)
     ################################################################################
     logger.info('Start testing...')
-    if rank == 0:
-        bar = tqdm(total=len(dataset))
     for seq_info, frames, first_seg, seg_ori in dataloader.create_tuple_iterator(num_epochs=1):
         # NOTE there is a batch dim when batch_size=1
         index, ori_h, ori_w = seq_info[0]
@@ -127,10 +124,6 @@ def main():
                 seg_tar).resize((int(ori_w.asnumpy()), int(ori_h.asnumpy())), 0))
             seg_name = os.path.join(seq_dir, f'{frame_index:05}.png')
             imwrite_indexed(seg_name, seg_tar)
-        if rank == 0:
-            bar.update(group_size)
-    if rank == 0:
-        bar.close()
     logger.info(f'All videos has been tested, results saved at {args.output_dir}.')
 
 
