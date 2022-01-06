@@ -5,6 +5,7 @@ import os
 import moxing as mox
 
 from mindspore import context, nn, set_seed, Model
+from mindspore.nn.learning_rate_schedule import CosineDecayLR
 from ssvos.datasets.utils import DataLoader
 from ssvos.utils.callbacks import (ConsoleLoggerCallBack,
                                    MindSightLoggerCallback, MyModelCheckpoint)
@@ -48,7 +49,7 @@ def add_args():
     parser.add_argument('--lr_schedule', type=str,
                         default='cosine', help='Learning rate decay schedule')
     parser.add_argument('--weight_decay', type=float,
-                        default=1e-5, help='weight decay')
+                        default=1e-4, help='weight decay')
     parser.add_argument('--warmup_epochs', type=int,
                         default=10, help='warmup epochs.')
 
@@ -91,8 +92,9 @@ def main():
     # init your lr scheduler here
     dataset_size = train_dataloader.get_dataset_size()
     lr = args.base_lr * group_size * args.batch_size / 256.
-    lr_scheduler = CosineDecayLRWithWarmup(lr, min_lr=1e-5, total_steps=args.epoch_size*dataset_size,
-                                           warmup_steps=args.warmup_epochs*dataset_size)
+    # lr_scheduler = CosineDecayLRWithWarmup(lr, min_lr=1e-5, total_steps=args.epoch_size*dataset_size,
+    #                                        warmup_steps=args.warmup_epochs*dataset_size)
+    lr_scheduler = CosineDecayLR(min_lr=1e-5, max_lr=lr, decay_steps=args.epoch_size*dataset_size)
     # init your optimizer here
     optimizer = nn.Momentum(model.trainable_params(), lr_scheduler, momentum=0.9,
                             weight_decay=args.weight_decay)
