@@ -57,6 +57,7 @@ def add_args():
 
 
 def main():
+    NUM_HOSTS = 3
     MODELARTS_DATA_DIR = '/cache/dataset'
     MODELARTS_WORK_DIR = '/cache/output'
     args = add_args()
@@ -92,9 +93,9 @@ def main():
     # init your lr scheduler here
     dataset_size = train_dataloader.get_dataset_size()
     lr = args.base_lr * group_size * args.batch_size / 256.
-    # lr_scheduler = CosineDecayLRWithWarmup(lr, min_lr=1e-5, total_steps=args.epoch_size*dataset_size,
-    #                                        warmup_steps=args.warmup_epochs*dataset_size)
-    lr_scheduler = CosineDecayLR(min_lr=1e-5, max_lr=lr, decay_steps=args.epoch_size*dataset_size)
+    lr_scheduler = CosineDecayLRWithWarmup(lr, min_lr=1e-5, total_steps=args.epoch_size*dataset_size*NUM_HOSTS,
+                                           warmup_steps=args.warmup_epochs*dataset_size*NUM_HOSTS)
+    # lr_scheduler = CosineDecayLR(min_lr=1e-5, max_lr=lr, decay_steps=args.epoch_size*dataset_size)
     # init your optimizer here
     optimizer = nn.Momentum(model.trainable_params(), lr_scheduler, momentum=0.9,
                             weight_decay=args.weight_decay)
