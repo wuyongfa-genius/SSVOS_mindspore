@@ -63,7 +63,7 @@ def main():
     set_logger_level_to()
     args = add_args()
     # set to graph mode
-    context.set_context(mode=context.GRAPH_MODE, device_target="Ascend")
+    context.set_context(mode=context.PYNATIVE_MODE, device_target="Ascend")
     # init dist
     rank, group_size = init_dist()
     log_info_func = partial(master_only_info, rank=rank)
@@ -74,7 +74,7 @@ def main():
     # dataloader
     dataset = DAVIS_VAL(MODELARTS_DATA_DIR, out_stride=args.out_stride)
     seq_names = dataset.seq_names
-    dataloader = DataLoader(dataset, batch_size=1, num_workers=1, shuffle=False, distributed=args.distribute)
+    dataloader = DataLoader(dataset, batch_size=1, num_workers=8, shuffle=False, distributed=args.distribute)
     dataloader = dataloader.build_dataloader()
     ## Build your own network here #################################################
     if args.arch == 'resnet50':
@@ -88,8 +88,6 @@ def main():
         load_partial_param_into_net(model, ckpt_path, prefix=args.encoder_key)
         # set model to test mode
         model.set_train(False)
-        # NOTE not sure that GRAPH_MODE needs this
-        model.set_grad(False)
     ################################################################################
     for seq_info, frames, first_seg, seg_ori in dataloader.create_tuple_iterator(num_epochs=1):
         # NOTE there is a batch dim when batch_size=1
@@ -97,6 +95,7 @@ def main():
         frames = frames[0] # T*1*C*H*W
         # make save dir
         seq_name = seq_names[index]
+        log_info_func(f'Processing seq {seq_name}...')
         seq_dir = os.path.join(MODELARTS_WORK_DIR, seq_name)
         os.makedirs(seq_dir, exist_ok=True)
         # extract first frame feat and saving first segmentation
@@ -116,7 +115,7 @@ def main():
             local_attention_mask = spatial_neighbor(q.shape[0], q.shape[-2], q.shape[-1],
                                         neighbor_range=args.radius, dtype=q.dtype)
             seg_tar = masked_attention_efficient(q, k, v, local_attention_mask,
-                            args.temperature, topk=args.topk, step=64)
+                            args.temperature, topk=args.topk, normalize=False, step=64)
             # pop out oldest frame if neccessary
             if len(que) == args.n_last_frames:
                 del que[0]
