@@ -33,3 +33,10 @@ class CosineDecayLRWithWarmup(LearningRateSchedule):
             degrees = ratio* self.math_pi
             cosine_value = 1/2 * (self.cos(degrees) + 1.)
             return self.delta * cosine_value + self.min_lr
+
+
+# if __name__=="__main__":
+#     from mindspore import Tensor
+#     lrs = CosineDecayLRWithWarmup(max_lr=1.0, min_lr=0.001, total_steps=100, warmup_steps=10)
+#     lr_list = [lrs.construct(Tensor(step)) for step in range(100)]
+#     print(lr_list)

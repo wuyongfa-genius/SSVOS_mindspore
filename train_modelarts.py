@@ -97,6 +97,11 @@ def main():
     # init your lr scheduler here
     dataset_size = train_dataloader.get_dataset_size()
     lr = args.base_lr * group_size * args.batch_size / 256.
+    master_only_info('-'*100, rank=rank)
+    master_only_info(f'dataset_size:{dataset_size}', rank=rank)
+    master_only_info(f'total_steps: {args.epoch_size*dataset_size}', rank=rank)
+    master_only_info(f'warmup_steps: {args.warmup_epochs*dataset_size}', rank=rank)
+    master_only_info('-'*100, rank=rank)
     lr_scheduler = CosineDecayLRWithWarmup(lr, min_lr=1e-5, total_steps=args.epoch_size*dataset_size,
                                            warmup_steps=args.warmup_epochs*dataset_size)
     # init your optimizer here
