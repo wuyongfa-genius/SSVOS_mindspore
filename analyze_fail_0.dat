@@ -1,0 +1,91 @@
+# [No.1] construct_wrapper.0
+# In file /data/SSVOS_mindspore/ssvos/utils/lr_schedule.py(27)/    def construct(self, global_step):/
+funcgraph fg_0(
+        %para1 : I64    # global_step
+    ) {
+
+#------------------------> 0
+    %1 = FuncGraph::fg_1(%para1)    #(I64)    # fg_1=construct.1 #scope: Default
+      # In file /data/SSVOS_mindspore/ssvos/utils/lr_schedule.py(28)/        if global_step <= self.warmup_steps:/#[CNode]4
+    Primitive::Return{prim_type=1}(%1)    #(Undefined) #scope: Default
+      # In file /data/SSVOS_mindspore/ssvos/utils/lr_schedule.py(28)/        if global_step <= self.warmup_steps:/#[CNode]5
+}
+# order:
+#   1: construct_wrapper.0:[CNode]4{[0]: ValueNode<FuncGraph> construct.1, [1]: global_step}
+#   2: construct_wrapper.0:[CNode]5{[0]: ValueNode<Primitive> Return, [1]: [CNode]4}
+
+
+# [No.2] construct.1
+# In file /data/SSVOS_mindspore/ssvos/utils/lr_schedule.py(27)/    def construct(self, global_step):/
+funcgraph fg_1(
+        %para2 : I64    # global_step
+    ) {
+    %1 : Bool = DoSignaturePrimitive::S-Prim-less_equal{prim_type=1}(%para2, F32(270))    #(I64, F32) #scope: Default
+      # In file /data/SSVOS_mindspore/ssvos/utils/lr_schedule.py(28)/        if global_step <= self.warmup_steps:/#[CNode]6
+    %2 : Bool = FuncGraph::fg_7(%1)    #(Bool)    # fg_7=bool_.7 #scope: Default
+      # In file /data/SSVOS_mindspore/ssvos/utils/lr_schedule.py(28)/        if global_step <= self.warmup_steps:/#[CNode]6
+    %3 : Func = Primitive::Switch{prim_type=1}(%2, FuncGraph::fg_2, FuncGraph::fg_8)    #(Bool, Func, Func)    # fg_2=✓construct.2, fg_8=✗construct.8 #scope: Default
+      # In file /data/SSVOS_mindspore/ssvos/utils/lr_schedule.py(28)/        if global_step <= self.warmup_steps:/#[CNode]9
+
+#------------------------> 1
+    %4 = %3() #scope: Default
+      # In file /data/SSVOS_mindspore/ssvos/utils/lr_schedule.py(28)/        if global_step <= self.warmup_steps:/#[CNode]10
+    Primitive::Return{prim_type=1}(%4)    #(Undefined) #scope: Default
+      # In file /data/SSVOS_mindspore/ssvos/utils/lr_schedule.py(28)/        if global_step <= self.warmup_steps:/#[CNode]11
+}
+# order:
+#   1: construct.1:[CNode]6{[0]: ValueNode<DoSignaturePrimitive> S-Prim-less_equal, [1]: global_step, [2]: ValueNode<FP32Imm> 270.000000}
+#   2: construct.1:[CNode]6{[0]: ValueNode<FuncGraph> bool_.7, [1]: [CNode]6}
+#   3: construct.1:[CNode]9{[0]: ValueNode<Primitive> Switch, [1]: [CNode]6, [2]: ValueNode<FuncGraph> ✓construct.2, [3]: ValueNode<FuncGraph> ✗construct.8}
+#   4: construct.1:[CNode]10{[0]: [CNode]9}
+#   5: construct.1:[CNode]11{[0]: ValueNode<Primitive> Return, [1]: [CNode]10}
+
+
+# [No.3] ✓construct.2
+# In file /data/SSVOS_mindspore/ssvos/utils/lr_schedule.py(28)/        if global_step <= self.warmup_steps:/
+funcgraph fg_2[fg_1](
+) {
+    %1 : F64 = DoSignaturePrimitive::S-Prim-div{prim_type=1}(%para2, F32(270))    #(I64, F32) #scope: Default
+      # In file /data/SSVOS_mindspore/ssvos/utils/lr_schedule.py(29)/            ratio = global_step / self.warmup_steps/#ratio
+
+#------------------------> 2
+    %2 = DoSignaturePrimitive::S-Prim-mul{prim_type=1}(%1, F32(0.09999))    #(F64, F32) #scope: Default
+      # In file /data/SSVOS_mindspore/ssvos/utils/lr_schedule.py(30)/            return ratio * self.delta + self.min_lr/#[CNode]12
+    %3 = DoSignaturePrimitive::S-Prim-add{prim_type=1}(%2, F32(1e-05))    #(Undefined, Undefined) #scope: Default
+      # In file /data/SSVOS_mindspore/ssvos/utils/lr_schedule.py(30)/            return ratio * self.delta + self.min_lr/#[CNode]13
+    Primitive::Return{prim_type=1}(%3)    #(Undefined) #scope: Default
+      # In file /data/SSVOS_mindspore/ssvos/utils/lr_schedule.py(30)/            return ratio * self.delta + self.min_lr/#[CNode]14
+}
+# order:
+#   1: ✓construct.2:ratio{[0]: ValueNode<DoSignaturePrimitive> S-Prim-div, [1]: global_step, [2]: ValueNode<FP32Imm> 270.000000}
+#   2: ✓construct.2:[CNode]12{[0]: ValueNode<DoSignaturePrimitive> S-Prim-mul, [1]: ratio, [2]: ValueNode<FP32Imm> 0.099990}
+#   3: ✓construct.2:[CNode]13{[0]: ValueNode<DoSignaturePrimitive> S-Prim-add, [1]: [CNode]12, [2]: ValueNode<FP32Imm> 0.000010}
+#   4: ✓construct.2:[CNode]14{[0]: ValueNode<Primitive> Return, [1]: [CNode]13}
+
+
+# [No.4] _mul_scalar.3
+# In file /usr/local/python-3.7.5/lib/python3.7/site-packages/mindspore/ops/composite/multitype_ops/mul_impl.py(32)/def _mul_scalar(x, y):/
+funcgraph fg_3(
+        %para3 : F64    # x
+        , %para4 : F32    # y
+    ) {
+    %1 : ExternalType = Primitive::resolve{prim_type=1}(NameSpace::SymbolStr, F)    #(ExternalType, ExternalType) #scope: Default
+      # In file /usr/local/python-3.7.5/lib/python3.7/site-packages/mindspore/ops/composite/multitype_ops/mul_impl.py(39)/    return F.scalar_mul(x, y)/#[CNode]15
+    %2 : Func = Primitive::getattr{prim_type=1}(%1, "scalar_mul")    #(ExternalType, String) #scope: Default
+      # In file /usr/local/python-3.7.5/lib/python3.7/site-packages/mindspore/ops/composite/multitype_ops/mul_impl.py(39)/    return F.scalar_mul(x, y)/#[CNode]16
+
+#------------------------> 4
+    %3 = %2(%para3, %para4)    #(F64, F32) #scope: Default
+      # In file /usr/local/python-3.7.5/lib/python3.7/site-packages/mindspore/ops/composite/multitype_ops/mul_impl.py(39)/    return F.scalar_mul(x, y)/#[CNode]17
+    Primitive::Return{prim_type=1}(%3)    #(Undefined) #scope: Default
+      # In file /usr/local/python-3.7.5/lib/python3.7/site-packages/mindspore/ops/composite/multitype_ops/mul_impl.py(39)/    return F.scalar_mul(x, y)/#[CNode]18
+}
+# order:
+#   1: _mul_scalar.19:[CNode]20{[0]: ValueNode<Primitive> resolve, [1]: ValueNode<NameSpace> CommonOPS, [2]: ValueNode<Symbol> MakeTuple}
+#   2: _mul_scalar.19:[CNode]21{[0]: [CNode]20, [1]: x, [2]: y}
+#   3: _mul_scalar.3:[CNode]17{[0]: [CNode]16, [1]: x, [2]: y}
+#   4: _mul_scalar.3:[CNode]18{[0]: ValueNode<Primitive> Return, [1]: [CNode]17}
+
+
+#===============================================================================
+# num of function graphs in stack: 6

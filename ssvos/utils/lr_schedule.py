@@ -35,8 +35,7 @@ class CosineDecayLRWithWarmup(LearningRateSchedule):
             return self.delta * cosine_value + self.min_lr
 
 
-# if __name__=="__main__":
-#     from mindspore import Tensor
-#     lrs = CosineDecayLRWithWarmup(max_lr=1.0, min_lr=0.001, total_steps=100, warmup_steps=10)
-#     lr_list = [lrs.construct(Tensor(step)) for step in range(100)]
-#     print(lr_list)
+if __name__=="__main__":
+    from mindspore import Tensor
+    lrs = CosineDecayLRWithWarmup(max_lr=0.1, min_lr=1e-5, total_steps=2700, warmup_steps=270)
+    print(lrs(Tensor(23)))

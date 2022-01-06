@@ -4,14 +4,12 @@ import numpy as np
 import os
 import moxing as mox
 
-from mindspore import context, nn, set_seed
-from mindspore.train.serialization import load_checkpoint, load_param_into_net
+from mindspore import context, nn, set_seed, Model
 from ssvos.datasets.utils import DataLoader
 from ssvos.utils.callbacks import (ConsoleLoggerCallBack,
                                    MindSightLoggerCallback, MyModelCheckpoint)
 from ssvos.utils.dist_utils import init_dist
 from ssvos.utils.lr_schedule import CosineDecayLRWithWarmup
-from ssvos.utils.Model_wrapper import Model_with_start_states
 from ssvos.datasets import RawFrameDataset
 from ssvos.models.BYOL import BYOL
 from ssvos.models.backbones import VideoTransformerNetwork
@@ -43,8 +41,6 @@ def add_args():
                         help='num workers to load dataset.')
     parser.add_argument('--epoch_size', type=int, default=100, help='epoch size for training, \
                     default is 100.')
-    parser.add_argument('--resume_from', default=None, help='Resume training from a saved\
-                    ckpt before, the path is wrt the workdir.')
     parser.add_argument('--optimizer', type=str, default='Momentum', help='Optimizer, Currently only\
                     Momentum is supported.')
     parser.add_argument('--base_lr', type=float,
@@ -61,7 +57,6 @@ def add_args():
 
 def main():
     MODELARTS_DATA_DIR = '/cache/dataset'
-    MODELARTS_PRETRAINED_DIR = '/cache/pretrained'
     MODELARTS_WORK_DIR = '/cache/output'
     args = add_args()
     set_logger_level_to()
@@ -74,7 +69,6 @@ def main():
     rank, group_size = init_dist()
 
     MODELARTS_DATA_DIR = os.path.join(MODELARTS_DATA_DIR, f'_{rank}')
-    MODELARTS_PRETRAINED_DIR = os.path.join(MODELARTS_PRETRAINED_DIR, f'_{rank}')
     MODELARTS_WORK_DIR = os.path.join(MODELARTS_WORK_DIR, f'_{rank}')
     os.makedirs(MODELARTS_WORK_DIR, exist_ok=True)
     ## init your train dataloader here
@@ -97,11 +91,6 @@ def main():
     # init your lr scheduler here
     dataset_size = train_dataloader.get_dataset_size()
     lr = args.base_lr * group_size * args.batch_size / 256.
-    master_only_info('-'*100, rank=rank)
-    master_only_info(f'dataset_size:{dataset_size}', rank=rank)
-    master_only_info(f'total_steps: {args.epoch_size*dataset_size}', rank=rank)
-    master_only_info(f'warmup_steps: {args.warmup_epochs*dataset_size}', rank=rank)
-    master_only_info('-'*100, rank=rank)
     lr_scheduler = CosineDecayLRWithWarmup(lr, min_lr=1e-5, total_steps=args.epoch_size*dataset_size,
                                            warmup_steps=args.warmup_epochs*dataset_size)
     # init your optimizer here
@@ -109,25 +98,7 @@ def main():
                             weight_decay=args.weight_decay)
     # init train net
     train_net = nn.TrainOneStepCell(model, optimizer)
-
-    # load saved ckpt if we are resuming training or finetuning
-    start_epoch = 0
-    global_step = 0
-    if args.resume_from is not None:
-        master_only_info('[INFO] Copying saved ckpts from OBS to ModelArts...', rank=rank)
-        mox.file.copy(src_url=os.path.join(args.train_url, 'ckpts', args.resume_from), dst_url=MODELARTS_PRETRAINED_DIR)
-        master_only_info('[INFO] Done.', rank=rank)
-        ckpt = load_checkpoint(os.path.join(MODELARTS_PRETRAINED_DIR, args.resume_from))
-        if 'epoch' in ckpt.keys():
-            start_epoch = ckpt['epoch']
-        if 'global_step' in ckpt.keys():
-            global_step = ckpt['global_step']
-        # load model params and optimizer params
-        load_param_into_net(train_net, ckpt)
-        master_only_info("[INFO] Checkpoint loaded!", rank=rank)
-    # set amp_level to 'O2' to use fp16 with dynamic loss scale
-    model = Model_with_start_states(train_net, amp_level='O0',
-                                    start_epoch=start_epoch, start_step=global_step)
+    model = Model(train_net)
 
     # init callbacks
     ckpt_dir = os.path.join(MODELARTS_WORK_DIR, 'ckpts')
